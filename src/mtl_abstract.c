@@ -1,0 +1,280 @@
+/*
+	Copyright (c) 2023, VeriSign, Inc.
+	All rights reserved.
+
+	Redistribution and use in source and binary forms, with or without
+	modification, are permitted (subject to the limitations in the disclaimer
+	below) provided that the following conditions are met:
+
+		* Redistributions of source code must retain the above copyright notice,
+		this list of conditions and the following disclaimer.
+
+		* Redistributions in binary form must reproduce the above copyright
+		notice, this list of conditions and the following disclaimer in the
+		documentation and/or other materials provided with the distribution.
+
+		* Neither the name of the copyright holder nor the names of its
+		contributors may be used to endorse or promote products derived from this
+		software without specific prior written permission.
+
+	NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY
+	THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+	CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+	LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+	PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+	CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+	EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+	PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+	BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+	IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+	ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+	POSSIBILITY OF SUCH DAMAGE.
+*/
+#include <string.h>
+
+#include "mtl.h"
+#include "mtl_node_set.h"
+#include "mtl_spx.h"
+
+/************************************************************************
+ * The following algorithms are abstractions that use the constructs 
+ * that are defined in draft-harvey-cfrg-mtl-mode-00 to simplify use.
+ ************************************************************************/
+
+/*****************************************************************
+* Setup the MTL randomizer value
+******************************************************************
+ * @param ctx:         the context for this MTL Node Set
+ * @param randomizer:  pointer to a randomizer buffer
+ * @return 0 on success int on failure
+ */
+uint8_t mtl_generate_randomizer(MTL_CTX * ctx, RANDOMIZER ** randomizer)
+{
+	FILE *fd = NULL;
+	RANDOMIZER *mtl_random;
+
+	if ((ctx == NULL) || (randomizer == NULL)) {
+		LOG_ERROR("Bad parameters");
+		return 1;
+	}
+
+	mtl_random = malloc(sizeof(RANDOMIZER));
+
+	if (ctx->randomize) {
+		mtl_random->length = ctx->nodes.hash_size;
+		if ((mtl_random->value = malloc(mtl_random->length)) == NULL) {
+			LOG_ERROR("Unable to allocate buffer");
+			return 2;
+		}
+		// Get random bytes and copy to buffer
+		if ((fd = fopen("/dev/random", "r")) == NULL) {
+			LOG_ERROR("Unable to generate random data");
+			return 3;
+		}
+		fread(mtl_random->value, mtl_random->length, 1, fd);
+		fclose(fd);
+	} else {
+		mtl_random->length = ctx->seed.length;
+		if ((mtl_random->value = malloc(mtl_random->length)) == NULL) {
+			LOG_ERROR("Unable to allocate buffer");
+			return 2;
+		}
+		memcpy(mtl_random->value, ctx->seed.seed, mtl_random->length);
+	}
+
+	*randomizer = mtl_random;
+
+	return 0;
+}
+
+/*****************************************************************
+* Free the MTL randomizer value
+******************************************************************
+ * @param mtl_random:  pointer to a randomizer buffer
+ * @return 0 on success int on failure
+ */
+MTLSTATUS mtl_randomizer_free(RANDOMIZER * mtl_random)
+{
+	if (mtl_random != NULL) {
+		if (mtl_random->value != NULL) {
+			free(mtl_random->value);
+		}
+		free(mtl_random);
+		mtl_random = NULL;
+	}
+	return MTL_OK;
+}
+
+/*****************************************************************
+* Generate the message hash with randomization and then append to
+* the MTL node set as a leaf node. 
+******************************************************************
+ * @param ctx:         the context for this MTL Node Set
+ * @param message:     byte array of message data
+ * @param message_len: byte length of the message data
+ * @return node_id:    Index of the leaf node that was appended
+ */
+uint32_t mtl_hash_and_append(MTL_CTX * ctx, uint8_t * message,
+			     uint16_t message_len)
+{
+	uint32_t leaf_index = 0;
+	// uint8_t *random_buffer;
+	uint8_t hash[EVP_MAX_MD_SIZE];
+	RANDOMIZER *mtl_random;
+
+	if ((ctx == NULL) || (message == NULL) || message_len == 0) {
+		LOG_ERROR("NULL Input Pointers");
+		return 0xffffffff;
+	}
+	// Generate the randomizer in a buffer
+	if (mtl_generate_randomizer(ctx, &mtl_random) != 0) {
+		LOG_ERROR("Unable to get node randomizer");
+		return 0xffffffff;
+	}
+	// mtl_append from draft-harvey-cfrg-mtl-mode-00 Section 8.4
+	leaf_index = ctx->nodes.leaf_count;
+	ctx->nodes.leaf_count++;
+
+	// Hash the message
+	if (ctx->hash_msg != NULL) {
+		if (ctx->hash_msg(ctx->sig_params, &ctx->sid, leaf_index,
+				  mtl_random->value, mtl_random->length,
+				  message, message_len, &hash[0],
+				  ctx->nodes.hash_size) != 0) {
+			LOG_ERROR("Unable to hash leaf node");
+			mtl_randomizer_free(mtl_random);
+			return 0xffffffff;
+		}
+	} else {
+		LOG_ERROR("Message hash function is not defined");
+	}
+
+	mtl_node_set_insert_randomizer(&ctx->nodes, leaf_index,
+				       mtl_random->value);
+
+	mtl_randomizer_free(mtl_random);
+
+	// Insert the leaf in the MTL node set
+	if (mtl_append(ctx, &hash[0], ctx->nodes.hash_size, leaf_index) != 0) {
+		LOG_ERROR("Append Message Error");
+		return 0xffffffff;
+	}
+	return leaf_index;
+}
+
+/*****************************************************************
+* Get the MTL Auth path and randomizer value
+******************************************************************
+ * @param ctx,  the context for this MTL Node Set
+ * @param leaf_index: index of the leaf node that is being appended
+ * @param randomizer: pointer to randomizer buffer 
+ * @param auth:       pointer to authpath buffer
+ * @return R0 on success
+ */
+uint8_t mtl_randomizer_and_authpath(MTL_CTX * ctx, uint32_t leaf_index,
+				    RANDOMIZER ** randomizer, AUTHPATH ** auth)
+{
+	RANDOMIZER *mtl_random = NULL;
+
+	if ((ctx == NULL) || (randomizer == NULL) || (auth == NULL)) {
+		LOG_ERROR("Null parameters");
+		return 1;
+	}
+
+	mtl_random = malloc(sizeof(RANDOMIZER));
+	mtl_random->length = ctx->nodes.hash_size;
+
+	if (mtl_node_set_get_randomizer
+	    (&ctx->nodes, leaf_index, &mtl_random->value) != 0) {
+		LOG_ERROR("Randomizer Failure");
+		return 2;
+	}
+
+	*randomizer = mtl_random;
+	*auth = mtl_authpath(ctx, leaf_index);
+
+	return 0;
+}
+
+/*****************************************************************
+* Generate the message hash with randomization and then verify
+* the hash with the authenticaiton path
+******************************************************************
+ * @param ctx:  the context for this MTL Node Set
+ * @param message: message to verify
+ * @param message_len: length of the message in bytes
+ * @param randomizer: randomizer value for this leaf node
+ * @param auth_path: authenticaiton path to verify
+ * @param assoc_rung: rung used to verify this auth path
+ * @return 0 on success, int on failure
+ */
+uint8_t mtl_hash_and_verify(MTL_CTX * ctx, uint8_t * message,
+			    uint16_t message_len, RANDOMIZER * randomizer,
+			    AUTHPATH * auth_path, RUNG * assoc_rung)
+{
+	uint32_t leaf_index = 0;
+	uint8_t data_value[EVP_MAX_MD_SIZE];
+
+	if ((ctx == NULL) || (message == NULL) || (message_len == 0)
+	    || (auth_path == NULL) || (randomizer == NULL)
+	    || (assoc_rung == NULL)) {
+		return 1;
+	}
+
+	leaf_index = auth_path->leaf_index;
+
+	// mtl_authpath from draft-harvey-cfrg-mtl-mode-00 Section 8.8
+	// Randomize the message digest
+	if (ctx->hash_msg != NULL) {
+		if (ctx->hash_msg(ctx->sig_params, &ctx->sid, leaf_index,
+				  randomizer->value, randomizer->length,
+				  message, message_len, &data_value[0],
+				  ctx->nodes.hash_size) != 0) {
+			LOG_ERROR("Unable to hash leaf node");
+		}
+	} else {
+		LOG_ERROR("Message hash function is not defined");
+	}
+
+	return mtl_verify(ctx, &data_value[0], ctx->nodes.hash_size, auth_path,
+			  assoc_rung);
+}
+
+/*****************************************************************
+* Generate the message hash with randomization and then verify
+* the hash with the authenticaiton path
+******************************************************************
+ * @param ctx:  the context for this MTL Node Set
+ * @param ladder: ladder buffer pointer
+ * @param hash_size: size of the hash in bytes
+ * @param buffer: pointer to output buffer 
+ * @return buffer size
+ */
+uint32_t mtl_get_scheme_separated_buffer(MTL_CTX * ctx, LADDER * ladder,
+					 uint32_t hash_size, uint8_t ** buffer)
+{
+	uint32_t ladder_buffer_size = 0;
+	uint8_t *ladder_buffer = NULL;
+	uint32_t address_len = ADRS_ADDR_SIZE_C;
+	uint8_t address[32] = { 0 };
+	uint8_t *underlying_buffer = NULL;
+
+	// Ladder to buffer
+	ladder_buffer_size =
+	    mtl_ladder_to_buffer(ladder, hash_size, &ladder_buffer);
+
+	// Address Scheme Separation from from draft-harvey-cfrg-mtl-mode-00 Section 4.5
+	// Create address structure (Full)
+	address_len =
+	    mtlns_adrs_full((uint8_t *) & address, SPX_ADRS_MTL_DATA, &ctx->sid,
+			    0, 0);
+	// Sign ADRS + Ladder_Bytes
+	underlying_buffer = malloc(ladder_buffer_size + address_len);
+	memcpy(underlying_buffer, address, address_len);
+	memcpy(underlying_buffer + address_len, ladder_buffer,
+	       ladder_buffer_size);
+	free(ladder_buffer);
+
+	*buffer = underlying_buffer;
+	return ladder_buffer_size + address_len;
+}
