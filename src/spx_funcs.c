@@ -1,5 +1,5 @@
 /*
-	Copyright (c) 2023, VeriSign, Inc.
+	Copyright (c) 2024, VeriSign, Inc.
 	All rights reserved.
 
 	Redistribution and use in source and binary forms, with or without
@@ -44,10 +44,12 @@
 
 /*****************************************************************
 * Block Pad data
-******************************************************************
- * @param out:     Byte array output
- * @param in:      Unsigned 32 bit integer to convert
- * @return none
+****************************************************************** 
+ * @param data:      Byte array of data to pad
+ * @param data_len:  Length of the data to pad
+ * @param block_len: Block size to use for padding
+ * @param buffer:    Byte array output
+ * @return total size of padded data
  */
 uint32_t block_pad(uint8_t * data, uint32_t data_len, uint32_t block_len,
 		   uint8_t ** buffer)
@@ -91,16 +93,16 @@ void mgf1_256(unsigned char *out, unsigned long out_len,
 	memcpy(buffer, in, in_len);
 
 	// Update each full block in the output
-	for (block = 0; block < out_len / SHA2_256_BLOCK_SIZE; block++) {
+	for (block = 0; block < out_len / (SHA2_256_BLOCK_SIZE/2); block++) {
 		uint32_to_bytes(buffer + in_len, block);
-		sha256(out + (block * SHA2_256_BLOCK_SIZE), buffer, in_len + 4);
+		sha256(out + (block * (SHA2_256_BLOCK_SIZE/2)), buffer, in_len + 4);
 	}
 	// Fill the remaining bytes in the output block
-	if (out_len % SHA2_256_BLOCK_SIZE > 0) {
+	if (out_len % (SHA2_256_BLOCK_SIZE/2) > 0) {
 		uint32_to_bytes(buffer + in_len, block);
 		sha256(hash, buffer, in_len + 4);
-		memcpy(out + (block * SHA2_256_BLOCK_SIZE), hash,
-		       out_len % SHA2_256_BLOCK_SIZE);
+		memcpy(out + (block * (SHA2_256_BLOCK_SIZE/2)), hash,
+		       out_len % (SHA2_256_BLOCK_SIZE/2));
 	}
 }
 
@@ -126,16 +128,16 @@ void mgf1_512(unsigned char *out, unsigned long out_len,
 	memcpy(buffer, in, in_len);
 
 	// Update each full block in the output
-	for (block = 0; block < out_len / SHA2_512_BLOCK_SIZE; block++) {
+	for (block = 0; block < out_len / (SHA2_512_BLOCK_SIZE/2); block++) {
 		uint32_to_bytes(buffer + in_len, block);
-		sha512(out + (block * SHA2_512_BLOCK_SIZE), buffer, in_len + 4);
+		sha512(out + (block * (SHA2_512_BLOCK_SIZE/2)), buffer, in_len + 4);
 	}
 	// Fill the remaining bytes in the output block
-	if (out_len % SHA2_512_BLOCK_SIZE > 0) {
+	if (out_len % (SHA2_512_BLOCK_SIZE/2) > 0) {
 		uint32_to_bytes(buffer + in_len, block);
 		sha512(hash, buffer, in_len + 4);
-		memcpy(out + (block * SHA2_512_BLOCK_SIZE), hash,
-		       out_len % SHA2_512_BLOCK_SIZE);
+		memcpy(out + (block * (SHA2_512_BLOCK_SIZE/2)), hash,
+		       out_len % (SHA2_512_BLOCK_SIZE/2));
 	}
 }
 

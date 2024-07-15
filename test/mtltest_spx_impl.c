@@ -1,5 +1,5 @@
 /*
-	Copyright (c) 2023, VeriSign, Inc.
+	Copyright (c) 2024, VeriSign, Inc.
 	All rights reserved.
 
 	Redistribution and use in source and binary forms, with or without
@@ -112,7 +112,7 @@ uint8_t test_SPX_mtlns_adrs_compressed(void)
 	memset(&sid.id, 0x55, 64);
 	// Verify a compressed address is created correctly
 	assert(mtlns_adrs_compressed
-	       ((uint8_t *) & mtl_adrs, SPX_ADRS_MTL_DATA, &sid, 8,
+	       ((uint8_t *) & mtl_adrs, SPX_ADRS_MTL_DATA, &sid, 0,
 		9) == ADRS_ADDR_SIZE_C);
 	assert(memcmp(mtl_adrs, adrs_compress, 32) == 0);
 
@@ -135,7 +135,7 @@ uint8_t test_SPX_mtlns_adrs_full(void)
 	memset(&sid.id, 0x55, 8);
 	// Verify a compressed address is created correctly
 	assert(mtlns_adrs_full
-	       ((uint8_t *) & mtl_adrs, SPX_ADRS_MTL_DATA, &sid, 8,
+	       ((uint8_t *) & mtl_adrs, SPX_ADRS_MTL_DATA, &sid, 0,
 		9) == ADRS_ADDR_SIZE);
 	assert(memcmp(mtl_adrs, adrs_full, 32) == 0);
 	// Verify that an invalid ADRS does not match

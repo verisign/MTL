@@ -1,5 +1,5 @@
 /*
-	Copyright (c) 2023, VeriSign, Inc.
+	Copyright (c) 2024, VeriSign, Inc.
 	All rights reserved.
 
 	Redistribution and use in source and binary forms, with or without
@@ -37,6 +37,9 @@
 #include "mtl.h"
 #include "mtl_util.h"
 
+#define VERIFY_AUTH_BUFFER_LEN(ptr, size, end)  	if(ptr + size > end) { LOG_ERROR("AUTH Path Buffer is insufficent length"); return 0; } 
+#define VERIFY_LADDER_BUFFER_LEN(ptr, size, end)  	if(ptr + size > end) { LOG_ERROR("LADDER Buffer is insufficent length"); return 0; } 
+
 /*****************************************************************
 * Create MTL Auth Path from a memory buffer
 ******************************************************************
@@ -47,14 +50,16 @@
  * @param auth_path:   Pointer to where the auth path is created
  * @return size of the authpath buffer in bytes
  */
-uint32_t mtl_auth_path_from_buffer(char *buffer, uint32_t hash_size,
-				   uint16_t sid_len, RANDOMIZER ** randomizer,
-				   AUTHPATH ** auth_path)
+uint32_t mtl_auth_path_from_buffer(char *buffer, size_t buffer_size,
+					uint32_t hash_size, uint16_t sid_len,
+					RANDOMIZER ** randomizer, AUTHPATH ** auth_path)
 {
 	uint32_t sig_size = 0;
 	uint8_t *sig_ptr = NULL;
 	AUTHPATH *path = NULL;
 	RANDOMIZER *mtl_rand = NULL;
+	uint8_t *sig_end_ptr = NULL;
+	size_t sibling_hash_length = 0;
 
 	if ((auth_path == NULL) || (buffer == NULL) ||
 	    (hash_size == 0) || (sid_len == 0) || (randomizer == NULL)) {
@@ -64,43 +69,57 @@ uint32_t mtl_auth_path_from_buffer(char *buffer, uint32_t hash_size,
 
 	sig_size = 16 + sid_len;
 	sig_ptr = (uint8_t *) buffer;
+	sig_end_ptr = sig_ptr + buffer_size;
 	path = calloc(1, sizeof(AUTHPATH));
 	mtl_rand = calloc(1, sizeof(RANDOMIZER));
 
 	// Randomizer Auth from draft-harvey-cfrg-mtl-mode-00 Section 9.4
 	mtl_rand->value = malloc(hash_size);
 	mtl_rand->length = hash_size;
+	VERIFY_AUTH_BUFFER_LEN	(sig_ptr, hash_size, sig_end_ptr);
 	memcpy(mtl_rand->value, sig_ptr, hash_size);
 	sig_ptr += hash_size;
 	sig_size += hash_size;
 
 	// Authentication Path from draft-harvey-cfrg-mtl-mode-00 Section 7.3
 	// Flags (2)
+	VERIFY_AUTH_BUFFER_LEN	(sig_ptr, 2, sig_end_ptr);
 	sig_ptr += bytes_to_uint16(sig_ptr, &path->flags);
 
 	// SID (Variable - 8 set by scheme)
 	path->sid.length = sid_len;
+	VERIFY_AUTH_BUFFER_LEN	(sig_ptr, sid_len, sig_end_ptr);
 	memcpy(path->sid.id, sig_ptr, sid_len);
 	sig_ptr += sid_len;
 
 	// Leaf Index (4)
+	VERIFY_AUTH_BUFFER_LEN	(sig_ptr, 4, sig_end_ptr);	
 	sig_ptr += bytes_to_uint32(sig_ptr, &path->leaf_index);
 
 	// Rung Left (4)
+	VERIFY_AUTH_BUFFER_LEN	(sig_ptr, 4, sig_end_ptr);	
 	sig_ptr += bytes_to_uint32(sig_ptr, &path->rung_left);
 
 	// Rung Right (4)
+	VERIFY_AUTH_BUFFER_LEN	(sig_ptr, 4, sig_end_ptr);	
 	sig_ptr += bytes_to_uint32(sig_ptr, &path->rung_right);
 
 	// Sibiling Node Count (2)
+	VERIFY_AUTH_BUFFER_LEN	(sig_ptr, 2, sig_end_ptr);	
 	sig_ptr += bytes_to_uint16(sig_ptr, &path->sibling_hash_count);
 
 	// Sibiling Hash Values (*)
-	path->sibling_hash = malloc(path->sibling_hash_count * hash_size);
-	memcpy(path->sibling_hash, sig_ptr,
-	       path->sibling_hash_count * hash_size);
-	sig_ptr += path->sibling_hash_count * hash_size;
-	sig_size += path->sibling_hash_count * hash_size;
+	sibling_hash_length = (size_t)path->sibling_hash_count *
+	                      (size_t)hash_size;
+	VERIFY_AUTH_BUFFER_LEN	(sig_ptr, sibling_hash_length, sig_end_ptr);
+	path->sibling_hash = malloc(sibling_hash_length);
+	if(path->sibling_hash == NULL) {
+		LOG_ERROR("ERROR: Unable allocate path buffer space");
+		return 0;
+	}
+	memcpy(path->sibling_hash, sig_ptr, sibling_hash_length);
+	sig_ptr += sibling_hash_length;
+	sig_size += sibling_hash_length;
 
 	*auth_path = path;
 	*randomizer = mtl_rand;
@@ -122,6 +141,7 @@ uint32_t mtl_auth_path_to_buffer(RANDOMIZER * randomizer, AUTHPATH * auth_path,
 	uint32_t sig_size;
 	uint8_t *sig_ptr;
 	uint8_t *sig_buffer;
+	size_t sibling_hash_length = 0;
 
 	if ((auth_path == NULL) || (randomizer == NULL) || (buffer == NULL)
 	    || (hash_size == 0)) {
@@ -139,6 +159,10 @@ uint32_t mtl_auth_path_to_buffer(RANDOMIZER * randomizer, AUTHPATH * auth_path,
 	    16 + hash_size + auth_path->sid.length +
 	    (auth_path->sibling_hash_count * hash_size);
 	sig_buffer = malloc(sig_size);
+	if(sig_buffer == NULL) {
+		LOG_ERROR("Unable to allocate buffer memory");
+		return 0;
+	}	
 	sig_ptr = sig_buffer;
 
 	// Randomizer Auth from draft-harvey-cfrg-mtl-mode-00 Section 9.4
@@ -165,8 +189,9 @@ uint32_t mtl_auth_path_to_buffer(RANDOMIZER * randomizer, AUTHPATH * auth_path,
 	sig_ptr += uint16_to_bytes(sig_ptr, auth_path->sibling_hash_count);
 
 	// Sibiling Hash Values (*)
-	memcpy(sig_ptr, auth_path->sibling_hash,
-	       auth_path->sibling_hash_count * hash_size);
+	sibling_hash_length = (size_t)auth_path->sibling_hash_count * 
+	                      (size_t)hash_size;
+	memcpy(sig_ptr, auth_path->sibling_hash, sibling_hash_length);
 
 	*buffer = sig_buffer;
 	return sig_size;
@@ -176,13 +201,14 @@ uint32_t mtl_auth_path_to_buffer(RANDOMIZER * randomizer, AUTHPATH * auth_path,
 * Create MTL Ladder from memory buffer
 ******************************************************************
  * @param buffer:     Pointer to the buffer to convert
+ * @param buffer_size Memory buffer size 
  * @param hash_size:  Length of hash algorithm output in bytes
  * @param sid_len:    Size of the MTL Series Id
  * @param ladder_ptr: Pointer to where the ladder is created
  * @return size of the authpath buffer in bytes
  */
-uint32_t mtl_ladder_from_buffer(char *buffer, uint32_t hash_size,
-				uint16_t sid_len, LADDER ** ladder_ptr)
+uint32_t mtl_ladder_from_buffer(char *buffer, size_t buffer_size,
+				uint32_t hash_size, uint16_t sid_len, LADDER ** ladder_ptr)
 {
 	if ((buffer == NULL) || (hash_size == 0) || (sid_len == 0)
 	    || (ladder_ptr == NULL)) {
@@ -192,38 +218,47 @@ uint32_t mtl_ladder_from_buffer(char *buffer, uint32_t hash_size,
 
 	uint32_t ladder_size = 4;
 	uint8_t *sig_ptr = (uint8_t *) buffer;
-	LADDER *ladder = malloc(sizeof(AUTHPATH));
+	uint8_t *sig_end_ptr = sig_ptr + buffer_size;	
+	LADDER *ladder = malloc(sizeof(LADDER));
 	uint16_t i;
 	RUNG *rung;
+	size_t rung_hash_length = 0;
 
 	// Ladder from draft-harvey-cfrg-mtl-mode-00 Section 7.1
 	// Flags (2)
+	VERIFY_LADDER_BUFFER_LEN(sig_ptr, 16, sig_end_ptr);	
 	sig_ptr += bytes_to_uint16(sig_ptr, &ladder->flags);
 
 	// SID (Variable - 8 set by scheme)
 	ladder->sid.length = sid_len;
+	VERIFY_LADDER_BUFFER_LEN(sig_ptr, sid_len, sig_end_ptr);	
 	memcpy(ladder->sid.id, sig_ptr, sid_len);
 	sig_ptr += sid_len;
 	ladder_size += sid_len;
 
 	// Rung Count (2)
+	VERIFY_LADDER_BUFFER_LEN(sig_ptr, 2, sig_end_ptr);	
 	sig_ptr += bytes_to_uint16(sig_ptr, &ladder->rung_count);
 
 	// Rung from draft-harvey-cfrg-mtl-mode-00 Section 7.2
-	ladder->rungs = malloc(8 * hash_size * ladder->rung_count);
+	rung_hash_length = 8 * (size_t)hash_size * (size_t)ladder->rung_count;
+	ladder->rungs = malloc(rung_hash_length);
 	for (i = 0; i < ladder->rung_count; i++) {
 		rung =
 		    (RUNG *) ((uint8_t *) ladder->rungs + (sizeof(RUNG) * i));
 
 		rung->hash_length = hash_size;
+		VERIFY_LADDER_BUFFER_LEN(sig_ptr, 4, sig_end_ptr);	
 		sig_ptr += bytes_to_uint32(sig_ptr, &rung->left_index);
 		ladder_size += 4;
 
 		// Right Index (4)
+		VERIFY_LADDER_BUFFER_LEN(sig_ptr, 4, sig_end_ptr);	
 		sig_ptr += bytes_to_uint32(sig_ptr, &rung->right_index);
 		ladder_size += 4;
 
 		// Randomizer (Hash Size)
+		VERIFY_LADDER_BUFFER_LEN(sig_ptr, hash_size, sig_end_ptr);	
 		memcpy(rung->hash, sig_ptr, hash_size);
 		sig_ptr += hash_size;
 		ladder_size += hash_size;
@@ -258,6 +293,10 @@ uint32_t mtl_ladder_to_buffer(LADDER * ladder, uint32_t hash_size,
 	sig_size =
 	    4 + ladder->sid.length + ((8 + hash_size) * ladder->rung_count);
 	sig_buffer = malloc(sig_size);
+	if(sig_buffer == NULL) {
+		LOG_ERROR("Unable to allocate buffer memory");
+		return 0;
+	}
 	sig_ptr = sig_buffer;
 
 	// Ladder from draft-harvey-cfrg-mtl-mode-00 Section 7.1

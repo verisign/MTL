@@ -1,5 +1,5 @@
 /*
-	Copyright (c) 2023, VeriSign, Inc.
+	Copyright (c) 2024, VeriSign, Inc.
 	All rights reserved.
 
 	Redistribution and use in source and binary forms, with or without
@@ -41,7 +41,8 @@ uint8_t mtl_test_hash_msg(void *parameters,
 			  uint32_t randomizer_len,
 			  uint8_t * msg_buffer,
 			  uint32_t msg_length, uint8_t * hash,
-			  uint32_t hash_length);
+			  uint32_t hash_length, char * ctx,
+			  uint8_t ** rmtl, uint32_t * rmtl_len);
 uint8_t mtl_test_hash_leaf(void *params,
 			   SERIESID * sid,
 			   uint32_t node_id,

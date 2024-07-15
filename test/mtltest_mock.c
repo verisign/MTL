@@ -1,5 +1,5 @@
 /*
-	Copyright (c) 2023, VeriSign, Inc.
+	Copyright (c) 2024, VeriSign, Inc.
 	All rights reserved.
 
 	Redistribution and use in source and binary forms, with or without
@@ -44,14 +44,17 @@ uint8_t mtl_test_hash_msg(void *parameters,
 			  uint32_t randomizer_len,
 			  uint8_t * msg_buffer,
 			  uint32_t msg_length, uint8_t * hash,
-			  uint32_t hash_length)
+			  uint32_t hash_length, char * ctx,
+			  uint8_t ** rmtl, uint32_t * rmtl_len)
 {
 	EVP_MD *hash_func = NULL;
 	EVP_MD_CTX *mdctx = NULL;
 	unsigned int hash_len;
+	uint8_t * rmtl_buffer;
 	// for these tests these parameters are not used
 	sid = sid;
 	node_id = node_id;
+	ctx=ctx;
 
 	parameters = parameters;
 	hash_length = hash_length;
@@ -82,6 +85,13 @@ uint8_t mtl_test_hash_msg(void *parameters,
 		LOG_ERROR("Unable to finalize digest");
 		// ERROR                
 		return 1;
+	}
+
+	if(*rmtl_len == 0) {
+		rmtl_buffer = malloc(randomizer_len);
+		memcpy(rmtl_buffer, randomizer, randomizer_len);
+		*rmtl = rmtl_buffer;
+		*rmtl_len = randomizer_len;
 	}
 
 	EVP_MD_CTX_free(mdctx);

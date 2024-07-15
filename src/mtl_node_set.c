@@ -1,5 +1,5 @@
 /*
-	Copyright (c) 2023, VeriSign, Inc.
+	Copyright (c) 2024, VeriSign, Inc.
 	All rights reserved.
 
 	Redistribution and use in source and binary forms, with or without
@@ -44,7 +44,7 @@
  * @param sid: series id to use for this MTLNS
  * @return none
  */
-void mtl_node_set_init(MTLNODES * nodes, SEED seed, SERIESID * sid)
+void mtl_node_set_init(MTLNODES * nodes, SEED *seed, SERIESID * sid)
 {
 	uint16_t index;
 	// Reserved for future needs
@@ -56,7 +56,7 @@ void mtl_node_set_init(MTLNODES * nodes, SEED seed, SERIESID * sid)
 	}
 
 	nodes->leaf_count = 0;
-	nodes->hash_size = seed.length;
+	nodes->hash_size = seed->length;
 	nodes->tree_page_size = MTL_TREE_PAGE_SIZE;
 	// Initalize the tree pages
 	for (index = 0; index < MTL_TREE_MAX_PAGES; index++) {
@@ -109,7 +109,6 @@ void mtl_node_set_free(MTLNODES * nodes)
  * @param left: left index of the node to insert
  * @param right: right index of the node to insert
  * @param hash: hash value to insert
- * @param rand: randomizer value to insert (NULL for none)
  * @return 0 if successful
  */
 uint8_t mtl_node_set_insert(MTLNODES * nodes, uint32_t left, uint32_t right,
@@ -147,6 +146,14 @@ uint8_t mtl_node_set_insert(MTLNODES * nodes, uint32_t left, uint32_t right,
 	return 0;
 }
 
+/*****************************************************************
+*  MTL node set insert randomizer
+******************************************************************
+ * @param nodes: Pointer to MTL node context to initalize
+ * @param leaf_index: The leaf index that utilizes the randomizer
+ * @param rand: randomizer value to insert (NULL for none)
+ * @return none
+ */
 uint8_t mtl_node_set_insert_randomizer(MTLNODES * nodes,
 				       uint32_t leaf_index, uint8_t * rand)
 {

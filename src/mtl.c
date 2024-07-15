@@ -1,5 +1,5 @@
 /*
-	Copyright (c) 2023, VeriSign, Inc.
+	Copyright (c) 2024, VeriSign, Inc.
 	All rights reserved.
 
 	Redistribution and use in source and binary forms, with or without
@@ -46,6 +46,7 @@
  * @param hash_msg, the scheme specific hash_msg function
  * @param hash_leaf, the scheme specific leaf hash function
  * @param hash_node, the scheme specific node hash function
+ * @param mtl_ctx,   the optional MTL context string
  * @return MTLSTATUS: MTL_OK if successful
  */
 MTLSTATUS mtl_set_scheme_functions(MTL_CTX * ctx, void *parameters,
@@ -58,7 +59,10 @@ MTLSTATUS mtl_set_scheme_functions(MTL_CTX * ctx, void *parameters,
 						       uint8_t * msg_buffer,
 						       uint32_t msg_length,
 						       uint8_t * hash,
-						       uint32_t hash_length),
+						       uint32_t hash_length,
+							   char* ctx,
+							   uint8_t ** rmtl,
+							   uint32_t * rmtl_len),
 				   uint8_t(*hash_leaf) (void *params,
 							SERIESID * sid,
 							uint32_t node_id,
@@ -73,8 +77,11 @@ MTLSTATUS mtl_set_scheme_functions(MTL_CTX * ctx, void *parameters,
 							uint8_t * left_hash,
 							uint8_t * right_hash,
 							uint8_t * hash,
-							uint32_t hash_length))
+							uint32_t hash_length),
+				   char* mtl_ctx)
 {
+	size_t ctx_str_len = 0;
+
 	if (ctx == NULL) {
 		return MTL_RESOURCE_FAIL;
 	}
@@ -84,6 +91,12 @@ MTLSTATUS mtl_set_scheme_functions(MTL_CTX * ctx, void *parameters,
 	ctx->hash_msg = hash_msg;
 	ctx->hash_leaf = hash_leaf;
 	ctx->hash_node = hash_node;
+	ctx->ctx_str = NULL;
+	if(mtl_ctx != NULL) {
+		ctx_str_len = strlen(mtl_ctx);
+		ctx->ctx_str = calloc(1, ctx_str_len+1);
+		strncpy(ctx->ctx_str, mtl_ctx,ctx_str_len);
+	}
 
 	return MTL_OK;
 }
@@ -100,22 +113,31 @@ MTLSTATUS mtl_set_scheme_functions(MTL_CTX * ctx, void *parameters,
  * @param ctx,  the context for this MTL Node Set
  * @param seed, seed value for this node set (associated with public key)
  * @param sid,  series identifier for this node set
+ * @param ctx_str, NULL or context string to use for MTL signatures
  * @return MTLSTATUS: MTL_OK if successful
  */
-MTLSTATUS mtl_initns(MTL_CTX ** mtl_ctx, SEED seed, SERIESID * sid)
+MTLSTATUS mtl_initns(MTL_CTX ** mtl_ctx, SEED *seed, SERIESID * sid, char* ctx_str)
 {
+	size_t ctx_str_len = 0;
+
 	if ((mtl_ctx == NULL) || (sid == NULL)) {
 		return MTL_RESOURCE_FAIL;
 	}
 	MTL_CTX *ctx = malloc(sizeof(MTL_CTX));
 
-	memcpy(&ctx->seed, &seed, sizeof(SEED));
+	memcpy(&ctx->seed, seed, sizeof(SEED));
 	memcpy(&ctx->sid, sid, sizeof(SERIESID));
 	ctx->randomize = 0;
 	ctx->sig_params = NULL;
 	ctx->hash_msg = NULL;
 	ctx->hash_leaf = NULL;
 	ctx->hash_node = NULL;
+	ctx->ctx_str = NULL;
+	if(ctx_str != NULL) {
+		ctx_str_len = strlen(ctx_str);
+		ctx->ctx_str = calloc(1, ctx_str_len+1);
+		strncpy(ctx->ctx_str, ctx_str, ctx_str_len);
+	}
 
 	mtl_node_set_init(&ctx->nodes, seed, sid);
 
@@ -245,7 +267,8 @@ AUTHPATH *mtl_authpath(MTL_CTX * ctx, uint32_t leaf_index)
 	memcpy(&auth_path->sid, &ctx->sid, sizeof(SERIESID));
 	auth_path->sibling_hash_count = mtl_bit_width(right - left);
 	auth_path->sibling_hash =
-	    malloc(auth_path->sibling_hash_count * ctx->nodes.hash_size);
+	    malloc((size_t)auth_path->sibling_hash_count * 
+		       (size_t)ctx->nodes.hash_size);
 	auth_path->rung_left = left;
 	auth_path->rung_right = right;
 
@@ -510,6 +533,9 @@ uint8_t mtl_verify(MTL_CTX * ctx, uint8_t * data_value,
 MTLSTATUS mtl_free(MTL_CTX * ctx)
 {
 	mtl_node_set_free(&ctx->nodes);
+	if(ctx->ctx_str != NULL) {
+		free(ctx->ctx_str);
+	}
 	free(ctx);
 	ctx = NULL;
 

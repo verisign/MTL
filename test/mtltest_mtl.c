@@ -1,5 +1,5 @@
 /*
-	Copyright (c) 2023, VeriSign, Inc.
+	Copyright (c) 2024, VeriSign, Inc.
 	All rights reserved.
 
 	Redistribution and use in source and binary forms, with or without
@@ -44,6 +44,7 @@
 
 // Prototypes for testing functions
 uint8_t mtltest_mtl_initns(void);
+uint8_t mtltest_mtl_initns_ctx(void);
 uint8_t mtltest_mtl_initns_null(void);
 uint8_t mtltest_mtl_set_scheme_functions(void);
 uint8_t mtltest_mtl_set_scheme_functions_null(void);
@@ -67,6 +68,8 @@ uint8_t mtltest_mtl(void)
 	NEW_TEST("MTL Tests");
 
 	RUN_TEST(mtltest_mtl_initns, "Verify MTL initialization");
+	RUN_TEST(mtltest_mtl_initns_ctx,
+		 "Verify MTL initialization w/ctx parameter");	
 	RUN_TEST(mtltest_mtl_initns_null,
 		 "Verify MTL initialization w/null parameters");
 	RUN_TEST(mtltest_mtl_set_scheme_functions,
@@ -117,13 +120,48 @@ uint8_t mtltest_mtl_initns(void)
 	pk_seed.length = 32;
 	memset(pk_seed.seed, 0, 32);
 
-	assert(mtl_initns(&mtl_ctx, pk_seed, &sid) == MTL_OK);
+	assert(mtl_initns(&mtl_ctx, &pk_seed, &sid, NULL) == MTL_OK);
 	assert(memcmp(&mtl_ctx->seed, &pk_seed, sizeof(SEED)) == 0);
 	assert(mtl_ctx->sid.length == sid.length);
 	assert(memcmp(&mtl_ctx->sid.id, &sid.id, sid.length) == 0);
 	assert(mtl_ctx->randomize == 0);
 	assert(mtl_ctx->sig_params == NULL);
 	assert(mtl_ctx->hash_msg == NULL);
+	assert(mtl_ctx->ctx_str == NULL);
+	assert(mtl_ctx->hash_leaf == NULL);
+	assert(mtl_ctx->hash_node == NULL);
+
+	assert(mtl_free(mtl_ctx) == MTL_OK);
+	return 0;
+}
+
+
+/**
+ * Test the mtl initialization routines with NULL parameters
+ */
+uint8_t mtltest_mtl_initns_ctx(void)
+{
+	SEED pk_seed;
+	SERIESID sid;
+	MTL_CTX *mtl_ctx = NULL;
+	char* ctx_str = "MTL_CTX_TEST";
+
+	memset(&sid, 0, sizeof(SERIESID));
+	sid.length = 8;
+	memset(&pk_seed, 0, sizeof(SEED));
+
+	pk_seed.length = 32;
+	memset(pk_seed.seed, 0, 32);
+
+	assert(mtl_initns(&mtl_ctx, &pk_seed, &sid, ctx_str) == MTL_OK);
+	assert(memcmp(&mtl_ctx->seed, &pk_seed, sizeof(SEED)) == 0);
+	assert(mtl_ctx->sid.length == sid.length);
+	assert(memcmp(&mtl_ctx->sid.id, &sid.id, sid.length) == 0);
+	assert(mtl_ctx->randomize == 0);
+	assert(mtl_ctx->sig_params == NULL);
+	assert(mtl_ctx->ctx_str != NULL);
+	assert(mtl_ctx->ctx_str != ctx_str);	
+	assert(strcmp((char*)mtl_ctx->ctx_str,ctx_str) == 0);
 	assert(mtl_ctx->hash_leaf == NULL);
 	assert(mtl_ctx->hash_node == NULL);
 
@@ -144,7 +182,7 @@ uint8_t mtltest_mtl_initns_null(void)
 	pk_seed.length = 32;
 	memset(pk_seed.seed, 0, 32);
 
-	assert(mtl_initns(NULL, pk_seed, &sid) == MTL_RESOURCE_FAIL);
+	assert(mtl_initns(NULL, &pk_seed, &sid, NULL) == MTL_RESOURCE_FAIL);
 
 	return 0;
 }
@@ -155,23 +193,22 @@ uint8_t mtltest_mtl_initns_null(void)
 uint8_t mtltest_mtl_set_scheme_functions(void)
 {
 	SEED pk_seed;
-	SPX_PARAMS params;
+	SPX_PARAMS *params = malloc(sizeof(SPX_PARAMS));
 	SERIESID sid;
 	MTL_CTX *mtl_ctx = NULL;
 
 	sid.length = 8;
 	memset(sid.id, 8, sid.length);
 
-	// memset(mtl_ctx, 0, sizeof(MTL_CTX));
 	memset(&pk_seed, 0, sizeof(SEED));
-	memset(&params, 0, sizeof(SPX_PARAMS));
+	memset(params, 0, sizeof(SPX_PARAMS));
 
 	sid.length = 8;
 	memset(sid.id, 0, sid.length);
 	pk_seed.length = 32;
 	memset(pk_seed.seed, 0, 32);
 
-	assert(mtl_initns(&mtl_ctx, pk_seed, &sid) == MTL_OK);
+	assert(mtl_initns(&mtl_ctx, &pk_seed, &sid, NULL) == MTL_OK);
 	assert(memcmp(&mtl_ctx->seed, &pk_seed, sizeof(SEED)) == 0);
 	assert(sid.length == 8);
 	assert(memcmp(&mtl_ctx->sid.id, &sid.id, sid.length) == 0);
@@ -181,23 +218,24 @@ uint8_t mtltest_mtl_set_scheme_functions(void)
 	assert(mtl_ctx->hash_leaf == NULL);
 	assert(mtl_ctx->hash_node == NULL);
 
-	memcpy(&params.pk_seed, &pk_seed, sizeof(SEED));
-	memcpy(&params.pk_root, &pk_seed, sizeof(SEED));
+	memcpy(&params->pk_seed, &pk_seed, sizeof(SEED));
+	memcpy(&params->pk_root, &pk_seed, sizeof(SEED));
 
 	// Test with stub functions
-	assert(mtl_set_scheme_functions(mtl_ctx, &params, 1,
+	assert(mtl_set_scheme_functions(mtl_ctx, params, 1,
 					mtl_test_hash_msg,
 					mtl_test_hash_leaf,
-					mtl_test_hash_node) == MTL_OK);
+					mtl_test_hash_node, NULL) == MTL_OK);
 	assert(mtl_ctx->randomize == 1);
 	assert(mtl_ctx->sig_params != NULL);
-	assert(memcmp(&params.pk_seed, &pk_seed, sizeof(SEED)) == 0);
-	assert(memcmp(&params.pk_root, &pk_seed, sizeof(SEED)) == 0);
+	assert(memcmp(&params->pk_seed, &pk_seed, sizeof(SEED)) == 0);
+	assert(memcmp(&params->pk_root, &pk_seed, sizeof(SEED)) == 0);
 	assert(mtl_ctx->hash_msg == mtl_test_hash_msg);
 	assert(mtl_ctx->hash_leaf == mtl_test_hash_leaf);
 	assert(mtl_ctx->hash_node == mtl_test_hash_node);
 
 	assert(mtl_free(mtl_ctx) == MTL_OK);
+	free(params);
 	return 0;
 }
 
@@ -207,20 +245,19 @@ uint8_t mtltest_mtl_set_scheme_functions(void)
 uint8_t mtltest_mtl_set_scheme_functions_null(void)
 {
 	SEED pk_seed;
-	SPX_PARAMS params;
+	SPX_PARAMS *params = malloc(sizeof(SPX_PARAMS));
 	SERIESID sid;
 	MTL_CTX *mtl_ctx = NULL;
 
-	// memset(mtl_ctx, 0, sizeof(MTL_CTX));
 	sid.length = MTL_SID_SIZE;
 	memset(&sid.id, 0, MTL_SID_SIZE);
 	memset(&pk_seed, 0, sizeof(SEED));
-	memset(&params, 0, sizeof(SPX_PARAMS));
+	memset(params, 0, sizeof(SPX_PARAMS));
 
 	pk_seed.length = 32;
 	memset(pk_seed.seed, 0, 32);
 
-	assert(mtl_initns(&mtl_ctx, pk_seed, &sid) == MTL_OK);
+	assert(mtl_initns(&mtl_ctx, &pk_seed, &sid, NULL) == MTL_OK);
 	assert(mtl_ctx->seed.length == pk_seed.length);
 	assert(memcmp(mtl_ctx->seed.seed, &pk_seed.seed, pk_seed.length) == 0);
 	assert(mtl_ctx->sid.length == sid.length);
@@ -231,21 +268,21 @@ uint8_t mtltest_mtl_set_scheme_functions_null(void)
 	assert(mtl_ctx->hash_leaf == NULL);
 	assert(mtl_ctx->hash_node == NULL);
 
-	memcpy(&params.pk_seed, &pk_seed, sizeof(SEED));
-	memcpy(&params.pk_root, &pk_seed, sizeof(SEED));
+	memcpy(&params->pk_seed, &pk_seed, sizeof(SEED));
+	memcpy(&params->pk_root, &pk_seed, sizeof(SEED));
 
 	// NULL Context
-	assert(mtl_set_scheme_functions(NULL, &params, 1,
+	assert(mtl_set_scheme_functions(NULL, params, 1,
 					mtl_test_hash_msg,
 					mtl_test_hash_leaf,
-					mtl_test_hash_node) ==
+					mtl_test_hash_node, NULL) ==
 	       MTL_RESOURCE_FAIL);
 
 	// NULL Params
 	assert(mtl_set_scheme_functions(mtl_ctx, NULL, 0,
 					mtl_test_hash_msg,
 					mtl_test_hash_leaf,
-					mtl_test_hash_node) == MTL_OK);
+					mtl_test_hash_node, NULL) == MTL_OK);
 	assert(mtl_ctx->randomize == 0);
 	assert(mtl_ctx->sig_params == NULL);
 	assert(mtl_ctx->hash_msg == mtl_test_hash_msg);
@@ -253,43 +290,45 @@ uint8_t mtltest_mtl_set_scheme_functions_null(void)
 	assert(mtl_ctx->hash_node == mtl_test_hash_node);
 
 	// NULL Message Hash
-	assert(mtl_set_scheme_functions(mtl_ctx, &params, 0,
+	assert(mtl_set_scheme_functions(mtl_ctx, params, 0,
 					NULL,
 					mtl_test_hash_leaf,
-					mtl_test_hash_node) == MTL_OK);
+					mtl_test_hash_node, NULL) == MTL_OK);
 	assert(mtl_ctx->randomize == 0);
 	assert(mtl_ctx->sig_params != NULL);
-	assert(memcmp(&params.pk_seed, &pk_seed, sizeof(SEED)) == 0);
-	assert(memcmp(&params.pk_root, &pk_seed, sizeof(SEED)) == 0);
+	assert(memcmp(&params->pk_seed, &pk_seed, sizeof(SEED)) == 0);
+	assert(memcmp(&params->pk_root, &pk_seed, sizeof(SEED)) == 0);
 	assert(mtl_ctx->hash_msg == NULL);
 	assert(mtl_ctx->hash_leaf == mtl_test_hash_leaf);
 	assert(mtl_ctx->hash_node == mtl_test_hash_node);
 
 	// NULL Leaf Hash
-	assert(mtl_set_scheme_functions(mtl_ctx, &params, 1,
+	assert(mtl_set_scheme_functions(mtl_ctx, params, 1,
 					mtl_test_hash_msg,
-					NULL, mtl_test_hash_node) == MTL_OK);
+					NULL, mtl_test_hash_node, NULL) == MTL_OK);
 	assert(mtl_ctx->randomize == 1);
 	assert(mtl_ctx->sig_params != NULL);
-	assert(memcmp(&params.pk_seed, &pk_seed, sizeof(SEED)) == 0);
-	assert(memcmp(&params.pk_root, &pk_seed, sizeof(SEED)) == 0);
+	assert(memcmp(&params->pk_seed, &pk_seed, sizeof(SEED)) == 0);
+	assert(memcmp(&params->pk_root, &pk_seed, sizeof(SEED)) == 0);
 	assert(mtl_ctx->hash_msg == mtl_test_hash_msg);
 	assert(mtl_ctx->hash_leaf == NULL);
 	assert(mtl_ctx->hash_node == mtl_test_hash_node);
 
 	// NULL Internal Node Hash
-	assert(mtl_set_scheme_functions(mtl_ctx, &params, 0,
+	assert(mtl_set_scheme_functions(mtl_ctx, params, 0,
 					mtl_test_hash_msg,
-					mtl_test_hash_leaf, NULL) == MTL_OK);
+					mtl_test_hash_leaf, NULL, NULL) == MTL_OK);
 	assert(mtl_ctx->randomize == 0);
 	assert(mtl_ctx->sig_params != NULL);
-	assert(memcmp(&params.pk_seed, &pk_seed, sizeof(SEED)) == 0);
-	assert(memcmp(&params.pk_root, &pk_seed, sizeof(SEED)) == 0);
+	assert(memcmp(&params->pk_seed, &pk_seed, sizeof(SEED)) == 0);
+	assert(memcmp(&params->pk_root, &pk_seed, sizeof(SEED)) == 0);
 	assert(mtl_ctx->hash_msg == mtl_test_hash_msg);
 	assert(mtl_ctx->hash_leaf == mtl_test_hash_leaf);
 	assert(mtl_ctx->hash_node == NULL);
 
 	assert(mtl_free(mtl_ctx) == MTL_OK);
+	free(params);
+
 	return 0;
 }
 
@@ -300,7 +339,7 @@ uint8_t mtltest_mtl_append(void)
 {
 	MTL_CTX *mtl_ctx = NULL;
 	SEED pk_seed;
-	SPX_PARAMS params;
+	SPX_PARAMS *params = malloc(sizeof(SPX_PARAMS));;
 	SERIESID sid;
 	uint16_t i;
 	uint8_t *hash;
@@ -348,13 +387,13 @@ uint8_t mtltest_mtl_append(void)
 	pk_seed.length = 32;
 	memset(pk_seed.seed, 0, 32);
 
-	assert(mtl_initns(&mtl_ctx, pk_seed, &sid) == MTL_OK);
-	memcpy(&params.pk_seed, &pk_seed, sizeof(SEED));
-	memcpy(&params.pk_root, &pk_seed, sizeof(SEED));
-	assert(mtl_set_scheme_functions(mtl_ctx, &params, 0,
+	assert(mtl_initns(&mtl_ctx, &pk_seed, &sid, NULL) == MTL_OK);
+	memcpy(&params->pk_seed, &pk_seed, sizeof(SEED));
+	memcpy(&params->pk_root, &pk_seed, sizeof(SEED));
+	assert(mtl_set_scheme_functions(mtl_ctx, params, 0,
 					mtl_test_hash_msg,
 					mtl_test_hash_leaf,
-					mtl_test_hash_node) == MTL_OK);
+					mtl_test_hash_node, NULL) == MTL_OK);
 
 	for (i = 0; i < 8; i++) {
 		assert(mtl_append
@@ -380,6 +419,7 @@ uint8_t mtltest_mtl_append(void)
 	free(hash);
 
 	assert(mtl_free(mtl_ctx) == MTL_OK);
+	free(params);
 	return 0;
 }
 
@@ -391,7 +431,7 @@ uint8_t mtltest_mtl_append_random(void)
 	MTL_CTX *mtl_ctx = NULL;
 	SERIESID sid;
 	SEED pk_seed;
-	SPX_PARAMS params;
+	SPX_PARAMS *params = malloc(sizeof(SPX_PARAMS));;
 	uint16_t i;
 	uint8_t *hash;
 	uint8_t ref_val[32];
@@ -438,13 +478,13 @@ uint8_t mtltest_mtl_append_random(void)
 	pk_seed.length = 32;
 	memset(pk_seed.seed, 0, 32);
 
-	assert(mtl_initns(&mtl_ctx, pk_seed, &sid) == MTL_OK);
-	memcpy(&params.pk_seed, &pk_seed, sizeof(SEED));
-	memcpy(&params.pk_root, &pk_seed, sizeof(SEED));
-	assert(mtl_set_scheme_functions(mtl_ctx, &params, 1,
+	assert(mtl_initns(&mtl_ctx, &pk_seed, &sid, NULL) == MTL_OK);
+	memcpy(&params->pk_seed, &pk_seed, sizeof(SEED));
+	memcpy(&params->pk_root, &pk_seed, sizeof(SEED));
+	assert(mtl_set_scheme_functions(mtl_ctx, params, 1,
 					mtl_test_hash_msg,
 					mtl_test_hash_leaf,
-					mtl_test_hash_node) == MTL_OK);
+					mtl_test_hash_node, NULL) == MTL_OK);
 
 	for (i = 0; i < 8; i++) {
 		assert(mtl_append
@@ -469,6 +509,8 @@ uint8_t mtltest_mtl_append_random(void)
 	free(hash);
 
 	assert(mtl_free(mtl_ctx) == MTL_OK);
+	free(params);
+
 	return 0;
 }
 
@@ -478,7 +520,7 @@ uint8_t mtltest_mtl_append_random(void)
 uint8_t mtltest_mtl_append_null(void)
 {
 	SEED pk_seed;
-	SPX_PARAMS params;
+	SPX_PARAMS *params = malloc(sizeof(SPX_PARAMS));;
 	SERIESID sid;
 	MTL_CTX *mtl_ctx = NULL;
 
@@ -487,19 +529,21 @@ uint8_t mtltest_mtl_append_null(void)
 	pk_seed.length = 32;
 	memset(pk_seed.seed, 0, 32);
 
-	assert(mtl_initns(&mtl_ctx, pk_seed, &sid) == MTL_OK);
-	memcpy(&params.pk_seed, &pk_seed, sizeof(SEED));
-	memcpy(&params.pk_root, &pk_seed, sizeof(SEED));
-	assert(mtl_set_scheme_functions(mtl_ctx, &params, 1,
+	assert(mtl_initns(&mtl_ctx, &pk_seed, &sid, NULL) == MTL_OK);
+	memcpy(&params->pk_seed, &pk_seed, sizeof(SEED));
+	memcpy(&params->pk_root, &pk_seed, sizeof(SEED));
+	assert(mtl_set_scheme_functions(mtl_ctx, params, 1,
 					mtl_test_hash_msg,
 					mtl_test_hash_leaf,
-					mtl_test_hash_node) == MTL_OK);
+					mtl_test_hash_node, NULL) == MTL_OK);
 
 	assert(mtl_append(NULL, (uint8_t *) "Test Data String", 16, 0) != 0);
 	assert(mtl_append(mtl_ctx, NULL, 16, 0) != 0);
 	assert(mtl_append(mtl_ctx, (uint8_t *) "Test Data String", 0, 0) != 0);
 
 	assert(mtl_free(mtl_ctx) == MTL_OK);
+	free(params);
+
 	return 0;
 }
 
@@ -511,7 +555,7 @@ uint8_t mtltest_mtl_authpath(void)
 	MTL_CTX *mtl_ctx = NULL;
 	SEED pk_seed;
 	SERIESID sid;
-	SPX_PARAMS params;
+	SPX_PARAMS *params = malloc(sizeof(SPX_PARAMS));;
 	uint32_t i;
 	AUTHPATH *auth;
 	uint8_t authpath[4][64] =
@@ -554,13 +598,13 @@ uint8_t mtltest_mtl_authpath(void)
 	pk_seed.length = 32;
 	memset(pk_seed.seed, 0, 32);
 
-	assert(mtl_initns(&mtl_ctx, pk_seed, &sid) == MTL_OK);
-	memcpy(&params.pk_seed, &pk_seed, sizeof(SEED));
-	memcpy(&params.pk_root, &pk_seed, sizeof(SEED));
-	assert(mtl_set_scheme_functions(mtl_ctx, &params, 0,
+	assert(mtl_initns(&mtl_ctx, &pk_seed, &sid, NULL) == MTL_OK);
+	memcpy(&params->pk_seed, &pk_seed, sizeof(SEED));
+	memcpy(&params->pk_root, &pk_seed, sizeof(SEED));
+	assert(mtl_set_scheme_functions(mtl_ctx, params, 0,
 					mtl_test_hash_msg,
 					mtl_test_hash_leaf,
-					mtl_test_hash_node) == MTL_OK);
+					mtl_test_hash_node, NULL) == MTL_OK);
 
 	for (i = 0; i < 4; i++) {
 		assert(mtl_hash_and_append
@@ -585,6 +629,7 @@ uint8_t mtltest_mtl_authpath(void)
 		assert(mtl_authpath_free(auth) == MTL_OK);
 	}
 	assert(mtl_free(mtl_ctx) == MTL_OK);
+	free(params);
 
 	return 0;
 }
@@ -597,7 +642,7 @@ uint8_t mtltest_mtl_authpath_multi(void)
 	MTL_CTX *mtl_ctx = NULL;
 	SERIESID sid;
 	SEED pk_seed;
-	SPX_PARAMS params;
+	SPX_PARAMS *params = malloc(sizeof(SPX_PARAMS));;
 	uint32_t i;
 	AUTHPATH *auth;
 	uint8_t authpath[4][64] =
@@ -650,13 +695,13 @@ uint8_t mtltest_mtl_authpath_multi(void)
 	pk_seed.length = 32;
 	memset(pk_seed.seed, 0, 32);
 
-	assert(mtl_initns(&mtl_ctx, pk_seed, &sid) == MTL_OK);
-	memcpy(&params.pk_seed, &pk_seed, sizeof(SEED));
-	memcpy(&params.pk_root, &pk_seed, sizeof(SEED));
-	assert(mtl_set_scheme_functions(mtl_ctx, &params, 0,
+	assert(mtl_initns(&mtl_ctx, &pk_seed, &sid, NULL) == MTL_OK);
+	memcpy(&params->pk_seed, &pk_seed, sizeof(SEED));
+	memcpy(&params->pk_root, &pk_seed, sizeof(SEED));
+	assert(mtl_set_scheme_functions(mtl_ctx, params, 0,
 					mtl_test_hash_msg,
 					mtl_test_hash_leaf,
-					mtl_test_hash_node) == MTL_OK);
+					mtl_test_hash_node, NULL) == MTL_OK);
 
 	for (i = 0; i < 6; i++) {
 		assert(mtl_hash_and_append
@@ -699,6 +744,7 @@ uint8_t mtltest_mtl_authpath_multi(void)
 
 	}
 	assert(mtl_free(mtl_ctx) == MTL_OK);
+	free(params);
 
 	return 0;
 }
@@ -711,7 +757,7 @@ uint8_t mtltest_mtl_authpath_null(void)
 	MTL_CTX *mtl_ctx = NULL;
 	SERIESID sid;
 	SEED pk_seed;
-	SPX_PARAMS params;
+	SPX_PARAMS *params = malloc(sizeof(SPX_PARAMS));;
 	AUTHPATH *auth;
 
 	sid.length = 8;
@@ -719,17 +765,18 @@ uint8_t mtltest_mtl_authpath_null(void)
 	pk_seed.length = 32;
 	memset(pk_seed.seed, 0, 32);
 
-	assert(mtl_initns(&mtl_ctx, pk_seed, &sid) == MTL_OK);
-	memcpy(&params.pk_seed, &pk_seed, sizeof(SEED));
-	memcpy(&params.pk_root, &pk_seed, sizeof(SEED));
-	assert(mtl_set_scheme_functions(mtl_ctx, &params, 0,
+	assert(mtl_initns(&mtl_ctx, &pk_seed, &sid, NULL) == MTL_OK);
+	memcpy(&params->pk_seed, &pk_seed, sizeof(SEED));
+	memcpy(&params->pk_root, &pk_seed, sizeof(SEED));
+	assert(mtl_set_scheme_functions(mtl_ctx, params, 0,
 					mtl_test_hash_msg,
 					mtl_test_hash_leaf,
-					mtl_test_hash_node) == MTL_OK);
+					mtl_test_hash_node, NULL) == MTL_OK);
 
 	auth = mtl_authpath(mtl_ctx, 4);
 	assert(auth == NULL);
 	assert(mtl_free(mtl_ctx) == MTL_OK);
+	free(params);
 
 	return 0;
 }
@@ -742,7 +789,7 @@ uint8_t mtltest_mtl_ladder(void)
 	MTL_CTX *mtl_ctx = NULL;
 	SERIESID sid;
 	SEED pk_seed;
-	SPX_PARAMS params;
+	SPX_PARAMS *params = malloc(sizeof(SPX_PARAMS));;
 	uint32_t i;
 	LADDER *ladder;
 	uint8_t rung_data[] = { 0x0e, 0xea, 0xdb, 0x7e, 0x93, 0x86, 0xf7, 0xce,
@@ -756,13 +803,13 @@ uint8_t mtltest_mtl_ladder(void)
 	pk_seed.length = 32;
 	memset(pk_seed.seed, 0, 32);
 
-	assert(mtl_initns(&mtl_ctx, pk_seed, &sid) == MTL_OK);
-	memcpy(&params.pk_seed, &pk_seed, sizeof(SEED));
-	memcpy(&params.pk_root, &pk_seed, sizeof(SEED));
-	assert(mtl_set_scheme_functions(mtl_ctx, &params, 0,
+	assert(mtl_initns(&mtl_ctx, &pk_seed, &sid, NULL) == MTL_OK);
+	memcpy(&params->pk_seed, &pk_seed, sizeof(SEED));
+	memcpy(&params->pk_root, &pk_seed, sizeof(SEED));
+	assert(mtl_set_scheme_functions(mtl_ctx, params, 0,
 					mtl_test_hash_msg,
 					mtl_test_hash_leaf,
-					mtl_test_hash_node) == MTL_OK);
+					mtl_test_hash_node, NULL) == MTL_OK);
 
 	for (i = 0; i < 4; i++) {
 		assert(mtl_hash_and_append
@@ -782,6 +829,8 @@ uint8_t mtltest_mtl_ladder(void)
 
 	assert(mtl_ladder_free(ladder) == MTL_OK);
 	assert(mtl_free(mtl_ctx) == MTL_OK);
+	free(params);
+
 	return 0;
 }
 
@@ -793,7 +842,7 @@ uint8_t mtltest_mtl_ladder_multi(void)
 	MTL_CTX *mtl_ctx = NULL;
 	SERIESID sid;
 	SEED pk_seed;
-	SPX_PARAMS params;
+	SPX_PARAMS *params = malloc(sizeof(SPX_PARAMS));;
 	uint32_t i;
 	LADDER *ladder;
 	uint8_t rung_data[2][32] =
@@ -812,13 +861,13 @@ uint8_t mtltest_mtl_ladder_multi(void)
 	pk_seed.length = 32;
 	memset(pk_seed.seed, 0, 32);
 
-	assert(mtl_initns(&mtl_ctx, pk_seed, &sid) == MTL_OK);
-	memcpy(&params.pk_seed, &pk_seed, sizeof(SEED));
-	memcpy(&params.pk_root, &pk_seed, sizeof(SEED));
-	assert(mtl_set_scheme_functions(mtl_ctx, &params, 0,
+	assert(mtl_initns(&mtl_ctx, &pk_seed, &sid, NULL) == MTL_OK);
+	memcpy(&params->pk_seed, &pk_seed, sizeof(SEED));
+	memcpy(&params->pk_root, &pk_seed, sizeof(SEED));
+	assert(mtl_set_scheme_functions(mtl_ctx, params, 0,
 					mtl_test_hash_msg,
 					mtl_test_hash_leaf,
-					mtl_test_hash_node) == MTL_OK);
+					mtl_test_hash_node, NULL) == MTL_OK);
 
 	for (i = 0; i < 6; i++) {
 		assert(mtl_hash_and_append
@@ -845,6 +894,7 @@ uint8_t mtltest_mtl_ladder_multi(void)
 
 	assert(mtl_ladder_free(ladder) == MTL_OK);
 	assert(mtl_free(mtl_ctx) == MTL_OK);
+	free(params);
 
 	return 0;
 }
@@ -857,23 +907,24 @@ uint8_t mtltest_mtl_ladder_null(void)
 	MTL_CTX *mtl_ctx = NULL;
 	SERIESID sid;
 	SEED pk_seed;
-	SPX_PARAMS params;
+	SPX_PARAMS *params = malloc(sizeof(SPX_PARAMS));;
 
 	sid.length = 8;
 	memset(sid.id, 0, sid.length);
 	pk_seed.length = 32;
 	memset(pk_seed.seed, 0, 32);
 
-	assert(mtl_initns(&mtl_ctx, pk_seed, &sid) == MTL_OK);
-	memcpy(&params.pk_seed, &pk_seed, sizeof(SEED));
-	memcpy(&params.pk_root, &pk_seed, sizeof(SEED));
-	assert(mtl_set_scheme_functions(mtl_ctx, &params, 0,
+	assert(mtl_initns(&mtl_ctx, &pk_seed, &sid, NULL) == MTL_OK);
+	memcpy(&params->pk_seed, &pk_seed, sizeof(SEED));
+	memcpy(&params->pk_root, &pk_seed, sizeof(SEED));
+	assert(mtl_set_scheme_functions(mtl_ctx, params, 0,
 					mtl_test_hash_msg,
 					mtl_test_hash_leaf,
-					mtl_test_hash_node) == MTL_OK);
+					mtl_test_hash_node, NULL) == MTL_OK);
 
 	assert(mtl_ladder(mtl_ctx) == NULL);
 	assert(mtl_free(mtl_ctx) == MTL_OK);
+	free(params);
 
 	return 0;
 }
@@ -886,7 +937,7 @@ uint8_t mtltest_mtl_rung(void)
 	MTL_CTX *mtl_ctx = NULL;
 	SERIESID sid;
 	SEED pk_seed;
-	SPX_PARAMS params;
+	SPX_PARAMS *params = malloc(sizeof(SPX_PARAMS));;
 	uint32_t i;
 	LADDER *ladder;
 	AUTHPATH *auth;
@@ -907,13 +958,13 @@ uint8_t mtltest_mtl_rung(void)
 	pk_seed.length = 32;
 	memset(pk_seed.seed, 0, 32);
 
-	assert(mtl_initns(&mtl_ctx, pk_seed, &sid) == MTL_OK);
-	memcpy(&params.pk_seed, &pk_seed, sizeof(SEED));
-	memcpy(&params.pk_root, &pk_seed, sizeof(SEED));
-	assert(mtl_set_scheme_functions(mtl_ctx, &params, 0,
+	assert(mtl_initns(&mtl_ctx, &pk_seed, &sid, NULL) == MTL_OK);
+	memcpy(&params->pk_seed, &pk_seed, sizeof(SEED));
+	memcpy(&params->pk_root, &pk_seed, sizeof(SEED));
+	assert(mtl_set_scheme_functions(mtl_ctx, params, 0,
 					mtl_test_hash_msg,
 					mtl_test_hash_leaf,
-					mtl_test_hash_node) == MTL_OK);
+					mtl_test_hash_node, NULL) == MTL_OK);
 
 	for (i = 0; i < 6; i++) {
 		assert(mtl_hash_and_append
@@ -948,6 +999,7 @@ uint8_t mtltest_mtl_rung(void)
 	assert(mtl_authpath_free(auth) == MTL_OK);
 	assert(mtl_ladder_free(ladder) == MTL_OK);
 	assert(mtl_free(mtl_ctx) == MTL_OK);
+	free(params);
 
 	return 0;
 }
@@ -960,7 +1012,7 @@ uint8_t mtltest_mtl_rung_null(void)
 	MTL_CTX *mtl_ctx = NULL;
 	SERIESID sid;
 	SEED pk_seed;
-	SPX_PARAMS params;
+	SPX_PARAMS *params = malloc(sizeof(SPX_PARAMS));;
 	uint32_t i;
 	RUNG *rung;
 	LADDER *ladder;
@@ -971,13 +1023,13 @@ uint8_t mtltest_mtl_rung_null(void)
 	pk_seed.length = 32;
 	memset(pk_seed.seed, 0, 32);
 
-	assert(mtl_initns(&mtl_ctx, pk_seed, &sid) == MTL_OK);
-	memcpy(&params.pk_seed, &pk_seed, sizeof(SEED));
-	memcpy(&params.pk_root, &pk_seed, sizeof(SEED));
-	assert(mtl_set_scheme_functions(mtl_ctx, &params, 0,
+	assert(mtl_initns(&mtl_ctx, &pk_seed, &sid, NULL) == MTL_OK);
+	memcpy(&params->pk_seed, &pk_seed, sizeof(SEED));
+	memcpy(&params->pk_root, &pk_seed, sizeof(SEED));
+	assert(mtl_set_scheme_functions(mtl_ctx, params, 0,
 					mtl_test_hash_msg,
 					mtl_test_hash_leaf,
-					mtl_test_hash_node) == MTL_OK);
+					mtl_test_hash_node, NULL) == MTL_OK);
 
 	for (i = 0; i < 6; i++) {
 		assert(mtl_hash_and_append
@@ -1024,6 +1076,7 @@ uint8_t mtltest_mtl_rung_null(void)
 	assert(mtl_authpath_free(auth) == MTL_OK);
 	assert(mtl_ladder_free(ladder) == MTL_OK);
 	assert(mtl_free(mtl_ctx) == MTL_OK);
+	free(params);
 
 	return 0;
 }
@@ -1037,7 +1090,7 @@ uint8_t mtltest_mtl_verify(void)
 	MTL_CTX *mtl_verify_ctx = NULL;
 	SERIESID sid;
 	SEED pk_seed;
-	SPX_PARAMS params;
+	SPX_PARAMS *params = malloc(sizeof(SPX_PARAMS));;
 	uint32_t i;
 	RUNG *rung;
 	LADDER *ladder;
@@ -1050,13 +1103,13 @@ uint8_t mtltest_mtl_verify(void)
 	pk_seed.length = 32;
 	memset(pk_seed.seed, 0, 32);
 
-	assert(mtl_initns(&mtl_ctx, pk_seed, &sid) == MTL_OK);
-	memcpy(&params.pk_seed, &pk_seed, sizeof(SEED));
-	memcpy(&params.pk_root, &pk_seed, sizeof(SEED));
-	assert(mtl_set_scheme_functions(mtl_ctx, &params, 0,
+	assert(mtl_initns(&mtl_ctx, &pk_seed, &sid, NULL) == MTL_OK);
+	memcpy(&params->pk_seed, &pk_seed, sizeof(SEED));
+	memcpy(&params->pk_root, &pk_seed, sizeof(SEED));
+	assert(mtl_set_scheme_functions(mtl_ctx, params, 0,
 					mtl_test_hash_msg,
 					mtl_test_hash_leaf,
-					mtl_test_hash_node) == MTL_OK);
+					mtl_test_hash_node, NULL) == MTL_OK);
 
 	for (i = 0; i < 6; i++) {
 		assert(mtl_hash_and_append
@@ -1069,19 +1122,17 @@ uint8_t mtltest_mtl_verify(void)
 	rung = mtl_rung(auth, ladder);
 
 	// Make a new context for verfication (it doesn't have the secret key data)
-	mtl_initns(&mtl_verify_ctx, pk_seed, &sid);
-	assert(mtl_set_scheme_functions(mtl_verify_ctx, &params, 0,
+	mtl_initns(&mtl_verify_ctx, &pk_seed, &sid, NULL);
+	assert(mtl_set_scheme_functions(mtl_verify_ctx, params, 0,
 					mtl_test_hash_msg,
 					mtl_test_hash_leaf,
-					mtl_test_hash_node) == MTL_OK);
+					mtl_test_hash_node, NULL) == MTL_OK);
 
 	// Test verification function with good randomizer
 	mtl_test_hash_msg(mtl_verify_ctx->sig_params, &mtl_verify_ctx->sid, 1,
 			  mtl_random->value, mtl_random->length,
 			  (uint8_t *) "Test Data String", 16, &data_value[0],
-			  mtl_verify_ctx->nodes.hash_size);
-	free(mtl_random->value);
-	free(mtl_random);
+			  mtl_verify_ctx->nodes.hash_size, NULL, &mtl_random->value, &mtl_random->length);
 				  
 	assert(mtl_verify
 	       (mtl_verify_ctx, data_value, mtl_verify_ctx->nodes.hash_size,
@@ -1091,6 +1142,9 @@ uint8_t mtltest_mtl_verify(void)
 	assert(mtl_ladder_free(ladder) == MTL_OK);
 	assert(mtl_free(mtl_ctx) == MTL_OK);
 	assert(mtl_free(mtl_verify_ctx) == MTL_OK);
+	free(mtl_random->value);
+	free(mtl_random);
+	free(params);
 
 	return 0;
 }
@@ -1104,26 +1158,28 @@ uint8_t mtltest_mtl_verify_rand(void)
 	MTL_CTX *mtl_verify_ctx = NULL;
 	SERIESID sid;
 	SEED pk_seed;
-	SPX_PARAMS params;
+	SPX_PARAMS *params = malloc(sizeof(SPX_PARAMS));;
 	uint32_t i;
 	RUNG *rung;
 	LADDER *ladder;
 	AUTHPATH *auth;
 	RANDOMIZER *mtl_random;
 	uint8_t data_value[EVP_MAX_MD_SIZE];
+	uint8_t* rmtl_ptr = NULL;
+	uint32_t rmtl_len = 0;
 
 	sid.length = 8;
 	memset(sid.id, 0, sid.length);
 	pk_seed.length = 32;
 	memset(pk_seed.seed, 0, 32);
 
-	assert(mtl_initns(&mtl_ctx, pk_seed, &sid) == MTL_OK);
-	memcpy(&params.pk_seed, &pk_seed, sizeof(SEED));
-	memcpy(&params.pk_root, &pk_seed, sizeof(SEED));
-	assert(mtl_set_scheme_functions(mtl_ctx, &params, 1,
+	assert(mtl_initns(&mtl_ctx, &pk_seed, &sid, NULL) == MTL_OK);
+	memcpy(&params->pk_seed, &pk_seed, sizeof(SEED));
+	memcpy(&params->pk_root, &pk_seed, sizeof(SEED));
+	assert(mtl_set_scheme_functions(mtl_ctx, params, 1,
 					mtl_test_hash_msg,
 					mtl_test_hash_leaf,
-					mtl_test_hash_node) == MTL_OK);
+					mtl_test_hash_node, NULL) == MTL_OK);
 
 	for (i = 0; i < 6; i++) {
 		assert(mtl_hash_and_append
@@ -1136,17 +1192,17 @@ uint8_t mtltest_mtl_verify_rand(void)
 	rung = mtl_rung(auth, ladder);
 
 	// Make a new context for verfication (it doesn't have the secret key data)
-	mtl_initns(&mtl_verify_ctx, pk_seed, &sid);
-	assert(mtl_set_scheme_functions(mtl_verify_ctx, &params, 1,
+	mtl_initns(&mtl_verify_ctx, &pk_seed, &sid, NULL);
+	assert(mtl_set_scheme_functions(mtl_verify_ctx, params, 1,
 					mtl_test_hash_msg,
 					mtl_test_hash_leaf,
-					mtl_test_hash_node) == MTL_OK);
+					mtl_test_hash_node, NULL) == MTL_OK);
 
 	// Test verification function with good randomizer
 	mtl_test_hash_msg(mtl_verify_ctx->sig_params, &mtl_verify_ctx->sid, 1,
 			  mtl_random->value, mtl_random->length,
 			  (uint8_t *) "Test Data String", 16, &data_value[0],
-			  mtl_verify_ctx->nodes.hash_size);
+			  mtl_verify_ctx->nodes.hash_size, NULL, &rmtl_ptr, &rmtl_len);
 	assert(mtl_verify
 	       (mtl_verify_ctx, data_value, mtl_verify_ctx->nodes.hash_size,
 		auth, rung) == 0);
@@ -1156,7 +1212,7 @@ uint8_t mtltest_mtl_verify_rand(void)
 	mtl_test_hash_msg(mtl_verify_ctx->sig_params, &mtl_verify_ctx->sid, 1,
 			  mtl_random->value, mtl_random->length,
 			  (uint8_t *) "Test Data String", 16, &data_value[0],
-			  mtl_verify_ctx->nodes.hash_size);
+			  mtl_verify_ctx->nodes.hash_size, NULL, &rmtl_ptr, &rmtl_len);
 	assert(mtl_verify
 	       (mtl_verify_ctx, data_value, mtl_verify_ctx->nodes.hash_size,
 		auth, rung) != 0);
@@ -1167,6 +1223,8 @@ uint8_t mtltest_mtl_verify_rand(void)
 	assert(mtl_ladder_free(ladder) == MTL_OK);
 	assert(mtl_free(mtl_ctx) == MTL_OK);
 	assert(mtl_free(mtl_verify_ctx) == MTL_OK);
+	free(rmtl_ptr);
+	free(params);
 
 	return 0;
 }
@@ -1180,7 +1238,7 @@ uint8_t mtltest_mtl_verify_null(void)
 	MTL_CTX *mtl_verify_ctx = NULL;
 	SERIESID sid;
 	SEED pk_seed;
-	SPX_PARAMS params;
+	SPX_PARAMS *params = malloc(sizeof(SPX_PARAMS));;
 	uint32_t i;
 	RUNG *rung;
 	LADDER *ladder;
@@ -1192,13 +1250,13 @@ uint8_t mtltest_mtl_verify_null(void)
 	pk_seed.length = 32;
 	memset(pk_seed.seed, 0, 32);
 
-	assert(mtl_initns(&mtl_ctx, pk_seed, &sid) == MTL_OK);
-	memcpy(&params.pk_seed, &pk_seed, sizeof(SEED));
-	memcpy(&params.pk_root, &pk_seed, sizeof(SEED));
-	assert(mtl_set_scheme_functions(mtl_ctx, &params, 1,
+	assert(mtl_initns(&mtl_ctx, &pk_seed, &sid, NULL) == MTL_OK);
+	memcpy(&params->pk_seed, &pk_seed, sizeof(SEED));
+	memcpy(&params->pk_root, &pk_seed, sizeof(SEED));
+	assert(mtl_set_scheme_functions(mtl_ctx, params, 1,
 					mtl_test_hash_msg,
 					mtl_test_hash_leaf,
-					mtl_test_hash_node) == MTL_OK);
+					mtl_test_hash_node, NULL) == MTL_OK);
 
 	for (i = 0; i < 6; i++) {
 		assert(mtl_hash_and_append
@@ -1210,11 +1268,11 @@ uint8_t mtltest_mtl_verify_null(void)
 	rung = mtl_rung(auth, ladder);
 
 	// Make a new context for verfication (it doesn't have the secret key data)
-	mtl_initns(&mtl_verify_ctx, pk_seed, &sid);
-	assert(mtl_set_scheme_functions(mtl_verify_ctx, &params, 1,
+	mtl_initns(&mtl_verify_ctx, &pk_seed, &sid, NULL);
+	assert(mtl_set_scheme_functions(mtl_verify_ctx, params, 1,
 					mtl_test_hash_msg,
 					mtl_test_hash_leaf,
-					mtl_test_hash_node) == MTL_OK);
+					mtl_test_hash_node, NULL) == MTL_OK);
 
 	// NULL CTX
 	assert(mtl_verify
@@ -1239,6 +1297,7 @@ uint8_t mtltest_mtl_verify_null(void)
 	assert(mtl_ladder_free(ladder) == MTL_OK);
 	assert(mtl_free(mtl_ctx) == MTL_OK);
 	assert(mtl_free(mtl_verify_ctx) == MTL_OK);
+	free(params);
 
 	return 0;
 }

@@ -1,5 +1,5 @@
 /*
-	Copyright (c) 2023, VeriSign, Inc.
+	Copyright (c) 2024, VeriSign, Inc.
 	All rights reserved.
 
 	Redistribution and use in source and binary forms, with or without
@@ -42,6 +42,7 @@
 #include <unistd.h>
 
 #include <oqs/sig.h>
+#include <openssl/evp.h>
 
 #include "mtltool.h"
 #include "mtltool_io.h"
@@ -50,27 +51,7 @@
 #include "mtl_spx.h"
 
 #include "schemes.h"
-
-/*****************************************************************
-* Get Underlying Signature
-******************************************************************
- * @param algo_str, C character string representing the algorithm
- * @return ALGORITHM structure element with the properties for
- *         the specific algorithm, or NULL if not found
- */
-ALGORITHM *get_underlying_signature(char *algo_str)
-{
-	uint16_t algo_idx = 0;
-
-	while (algos[algo_idx].name != NULL) {
-		if (strcmp(algos[algo_idx].name, (char *)algo_str) == 0) {
-			return &algos[algo_idx];
-		}
-		algo_idx++;
-	}
-
-	return NULL;
-}
+#include "mtl_example_util.h"
 
 /*****************************************************************
 * Sign each line in an ASCII file and write it to a signature file
@@ -80,10 +61,12 @@ ALGORITHM *get_underlying_signature(char *algo_str)
  * @param ctx, MTL context to use
  * @param oqs_str, underlying signature string in LibOQS form
  * @param sk, secret key to sign with
+ * @param oid, MTL algorithm OID
+ * @param oid_len, MTL algorithm OID length
  * @return 0 on success, other values on failure
  */
 uint8_t sign_records(FILE * input, FILE * output, MTL_CTX * ctx,
-		     char *oqs_str, uint8_t * sk)
+		     char *oqs_str, uint8_t * sk, uint8_t* oid, size_t oid_len)
 {
 	uint8_t buffer[4096];
 	size_t buffer_size = 4096;
@@ -111,7 +94,7 @@ uint8_t sign_records(FILE * input, FILE * output, MTL_CTX * ctx,
 	while (fgets((char *)&buffer[0], buffer_size, input)) {
 		leaf_index =
 		    mtl_hash_and_append(ctx, &buffer[0],
-					strlen((char *)buffer));
+					strlen((char *)buffer)+1);
 		curr = malloc(sizeof(QUEUE_NODE));
 		if (curr == NULL) {
 			return 1;
@@ -137,7 +120,7 @@ uint8_t sign_records(FILE * input, FILE * output, MTL_CTX * ctx,
 	underlying_buffer_len =
 		    mtl_get_scheme_separated_buffer(ctx, ladder,
 						    ctx->nodes.hash_size,
-						    &underlying_buffer);
+						    &underlying_buffer, oid, oid_len);
 	// Sign the ladder with the underlying scheme
 	sig = OQS_SIG_new(oqs_str);
 	if (sig == NULL) {
@@ -148,6 +131,7 @@ uint8_t sign_records(FILE * input, FILE * output, MTL_CTX * ctx,
 	OQS_SIG_sign(sig, ladder_sig + 4, &ladder_sig_len, underlying_buffer,
 		     underlying_buffer_len, sk);
 	OQS_SIG_free(sig);
+	free(underlying_buffer);
 
 	// Create the auth paths for the signed records
 	while (head != NULL) {
@@ -184,10 +168,12 @@ uint8_t sign_records(FILE * input, FILE * output, MTL_CTX * ctx,
  * @param ctx, MTL context to use
  * @param oqs_str, underlying signature string in LibOQS form
  * @param sk, secret key to sign with
+ * @param oid, MTL algorithm OID
+ * @param oid_len, MTL algorithm OID length
  * @return 0 on success, other values on failure
  */
 uint8_t verify_records(FILE * input, int signfd, MTL_CTX * ctx,
-		       char *oqs_str, uint8_t * pk)
+		       char *oqs_str, uint8_t * pk, uint8_t* oid, size_t oid_len)
 {
 	struct stat statbuf;
 	char *ptr;
@@ -222,19 +208,23 @@ uint8_t verify_records(FILE * input, int signfd, MTL_CTX * ctx,
 		// Read the MTL signature
 		sig_size =
 		    mtl_auth_path_from_buffer(ptr + offset,
+						  statbuf.st_size - offset,
 					      ctx->nodes.hash_size,
 					      ctx->sid.length,
 					      &mtl_rand, &auth_path);
 		offset += sig_size;
 
 		// And the ladder
-		ladder_buffer_size = mtl_ladder_from_buffer(ptr + offset, ctx->nodes.hash_size,
-					   ctx->sid.length, &ladder);
+		ladder_buffer_size = mtl_ladder_from_buffer(ptr + offset,
+							statbuf.st_size - offset,
+							ctx->nodes.hash_size,
+					   		ctx->sid.length, &ladder);
 		offset += ladder_buffer_size;
 
 		// Verify the ladder signature
 		sig = OQS_SIG_new(oqs_str);
 		if (sig == NULL) {
+			printf("ERROR: Unable to allocate key %s\n", oqs_str);
 			return 2;
 		}
 		ladder_sig = malloc(sig->length_signature + 4);
@@ -245,7 +235,7 @@ uint8_t verify_records(FILE * input, int signfd, MTL_CTX * ctx,
 		underlying_buffer_len =
 		    mtl_get_scheme_separated_buffer(ctx, ladder,
 						    ctx->nodes.hash_size,
-						    &underlying_buffer);
+						    &underlying_buffer, oid, oid_len);
 
 		// Get the signature length incase it is helpful
 		bytes_to_uint32(ladder_sig, &underlying_sig_len);
@@ -267,9 +257,9 @@ uint8_t verify_records(FILE * input, int signfd, MTL_CTX * ctx,
 
 		// Verify the signature
 		rung = mtl_rung(auth_path, ladder);
-		if (mtl_hash_and_verify
-		    (ctx, buffer, strlen((char *)buffer), mtl_rand, auth_path,
-		     rung) != 0) {
+
+		if (mtl_hash_and_verify(ctx, buffer, strlen((char *)buffer)+1,
+		                        mtl_rand, auth_path, rung) != 0) {
 			failures++;
 		}
 		mtl_randomizer_free(mtl_rand);
@@ -287,36 +277,41 @@ uint8_t verify_records(FILE * input, int signfd, MTL_CTX * ctx,
 ******************************************************************
  * @param keystr, key string (from CFRG-MTL-Draft)
  * @param keyfilename, name of file to write key information to
+ * @param ctx_str, an optional context string (or NULL)
  * @return 0 on success, other values on failure
  */
-uint8_t new_key(char *keystr, char *keyfilename)
+uint8_t new_key(char *keystr, char *keyfilename, char* ctx_str)
 {
 	SERIESID sid;
 	OQS_SIG *sig = NULL;
 	FILE *fd;
 	MTL_CTX *mtl_ctx = NULL;
 	SEED seed;
-	ALGORITHM *algo = get_underlying_signature(keystr);
+	ALGORITHM *algo = get_underlying_signature(keystr, algos);
 	uint8_t *public_key = NULL;
 	uint8_t *secret_key = NULL;
 	uint8_t ret_code = 0;
 
 	if (algo == NULL) {
+		printf("ERROR No Algorithm %s\n", keystr);
 		return 1;
 	}
 	// Create the new underlying singnature and allocate space for keys
 	sig = OQS_SIG_new(algo->oqs_str);
 	if (sig == NULL) {
+		printf("ERROR Unable to initalize keys\n");
 		return 2;
 	}
 	public_key = malloc(sig->length_public_key);
 	secret_key = malloc(sig->length_secret_key);
 
 	if ((public_key == NULL) || (secret_key == NULL)) {
+		printf("ERROR Unable allocate memory\n");		
 		return 1;
 	}
 	// Poplulate the public and secret keys
 	if (OQS_SIG_keypair(sig, public_key, secret_key) != OQS_SUCCESS) {
+		printf("ERROR Unable generate keys\n");			
 		return 2;
 	}
 	// Create the MTL Attributes
@@ -328,7 +323,7 @@ uint8_t new_key(char *keystr, char *keyfilename)
 	seed.length = algo->sec_param;
 	// Note SPHINCS+ PK = (PK.seed, PK.root)
 	memcpy(&seed.seed, public_key, seed.length);
-	mtl_initns(&mtl_ctx, seed, &sid);
+	mtl_initns(&mtl_ctx, &seed, &sid, ctx_str);
 
 	ret_code =
 	    write_key_file(keyfilename, secret_key, sig->length_secret_key,
@@ -392,7 +387,7 @@ int main(int argc, char **argv)
 	uint8_t results;
 	int failures;
 
-	printf("\n MTL Example Signature Tool    v.1.0.0\n");
+	printf("\n MTL Example Signature Tool    v.1.1.0\n");
 	command = "help";
 	if (argc >= 2) {
 		command = str2upper(argv[1]);
@@ -403,6 +398,10 @@ int main(int argc, char **argv)
 	} else {
 		printf("  Randomizer: Disabled\n");
 	}
+
+	// Setup example outputs (key and signatures) to be
+	// read and write only for owner of application
+	umask(0133);
 
 	// The following commmands are exclusive as you can only
 	// run one at a time.
@@ -417,7 +416,10 @@ int main(int argc, char **argv)
 		printf("  Signing Algorithm: %s\n", argv[3]);
 		algo_str = str2upper(argv[3]);
 
-		return new_key(algo_str, argv[2]);
+		if (argc == 4) {
+			return new_key(algo_str, argv[2], NULL);
+		}
+		return new_key(algo_str, argv[2], argv[4]);
 	}
 	// Sign a set of ASCII records from a datafile
 	if (strcmp(command, "SIGN") == 0) {
@@ -442,17 +444,16 @@ int main(int argc, char **argv)
 			mtl_set_scheme_functions(mtl_ctx, params, randomize,
 						 spx_mtl_node_set_hash_message_shake,
 						 spx_mtl_node_set_hash_leaf_shake,
-						 spx_mtl_node_set_hash_int_shake);
+						 spx_mtl_node_set_hash_int_shake, mtl_ctx->ctx_str);
 		} else if (algo_type == SPX_ALG_SHA2) {
 			mtl_set_scheme_functions(mtl_ctx, params, randomize,
 						 spx_mtl_node_set_hash_message_sha2,
 						 spx_mtl_node_set_hash_leaf_sha2,
-						 spx_mtl_node_set_hash_int_sha2);
+						 spx_mtl_node_set_hash_int_sha2, mtl_ctx->ctx_str);
 		} else {
 			printf("ERROR: Bad algorithm\n");
 			return (1);
 		}
-
 		// Verify the data files can be opend
 		input = fopen(argv[3], "r");
 		sign = fopen(argv[4], "wb");
@@ -462,12 +463,12 @@ int main(int argc, char **argv)
 			return (1);
 		}
 
-		ALGORITHM *algo = get_underlying_signature(keystr);
+		ALGORITHM *algo = get_underlying_signature(keystr, algos);
 		if (algo == NULL) {
 			return (1);
 		}
 		// Sign the records
-		sign_records(input, sign, mtl_ctx, algo->oqs_str, sk);
+		sign_records(input, sign, mtl_ctx, algo->oqs_str, sk, algo->oid, algo->oid_len);
 		fclose(input);
 		fclose(sign);
 
@@ -504,12 +505,12 @@ int main(int argc, char **argv)
 			mtl_set_scheme_functions(mtl_ctx, params, randomize,
 						 spx_mtl_node_set_hash_message_shake,
 						 spx_mtl_node_set_hash_leaf_shake,
-						 spx_mtl_node_set_hash_int_shake);
+						 spx_mtl_node_set_hash_int_shake, mtl_ctx->ctx_str);
 		} else if (algo_type == SPX_ALG_SHA2) {
 			mtl_set_scheme_functions(mtl_ctx, params, randomize,
 						 spx_mtl_node_set_hash_message_sha2,
 						 spx_mtl_node_set_hash_leaf_sha2,
-						 spx_mtl_node_set_hash_int_sha2);
+						 spx_mtl_node_set_hash_int_sha2, mtl_ctx->ctx_str);
 		} else {
 			printf("ERROR: Bad algorithm\n");
 			return (1);
@@ -524,13 +525,13 @@ int main(int argc, char **argv)
 			return (1);
 		}
 
-		ALGORITHM *algo = get_underlying_signature(keystr);
+		ALGORITHM *algo = get_underlying_signature(keystr, algos);
 		if (algo == NULL) {
 			return (1);
 		}
 
 		failures =
-		    verify_records(input, signfd, mtl_ctx, algo->oqs_str, pk);
+		    verify_records(input, signfd, mtl_ctx, algo->oqs_str, pk, algo->oid, algo->oid_len);
 		close(signfd);
 		fclose(input);
 		// Free all the MTL key variables

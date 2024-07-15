@@ -1,5 +1,5 @@
 /*
-	Copyright (c) 2023, VeriSign, Inc.
+	Copyright (c) 2024, VeriSign, Inc.
 	All rights reserved.
 
 	Redistribution and use in source and binary forms, with or without
@@ -235,9 +235,16 @@ uint8_t spx_sha2(uint8_t * seed, uint32_t seed_len,
 	uint8_t *buffer = NULL;
 	size_t buffer_len = 0;
 	uint32_t buffer_offset = 0;
+	uint32_t block_len = SHA2_512_BLOCK_SIZE;
+
+
+	memset(&hash[0], 0, hash_len);
 
 	// BlockPad(PK.seed)
-	padded_seed_len = block_pad(seed, seed_len, hash_len, &padded_seed);
+	if (hash_len <= 16) {
+		block_len = SHA2_256_BLOCK_SIZE;
+	}
+	padded_seed_len = block_pad(seed, seed_len, block_len, &padded_seed);
 
 	// Create the buffer that gets hashed   
 	buffer_len = padded_seed_len + adrs_len + data_len;
@@ -255,8 +262,6 @@ uint8_t spx_sha2(uint8_t * seed, uint32_t seed_len,
 	} else {
 		sha512(&hash[0], buffer, buffer_len);
 	}
-
-	memset(&hash[0] + hash_len, 0, 64 - hash_len);
 
 	free(buffer);
 	return 0;
@@ -310,6 +315,9 @@ uint8_t spx_shake(uint8_t * seed, uint32_t seed_len,
  * @param msg_len:    Length of the msg_buffer array
  * @param hash:       Pointer to byte array where hash is stored
  * @param hash_len:   Length of hash byte array
+ * @param ctx:        MTL signature context string
+ * @param rmtl       Generated randomness bytes for the hash
+ * @param rmtl_len   Length of the randomness bytes 
  * @param algorithm:  Type of algorithm used (#defined values) 
  * @return 0 if successful
  */
@@ -320,17 +328,22 @@ uint8_t spx_mtl_node_set_hash_message(void *params,
 				      uint32_t rand_len,
 				      uint8_t * msg_buffer, uint32_t msg_len,
 				      uint8_t * hash, uint32_t hash_len,
-				      uint8_t algorithm)
+				      char * ctx, uint8_t ** rmtl,
+					  uint32_t * rmtl_len, uint8_t algorithm)
 {
 	SPX_PARAMS *spx_prop = params;
 	unsigned int tmp_hash_len = 0;
 	uint8_t *buffer = NULL;
 	uint32_t buffer_len = 0;
 	uint32_t buffer_offset = 0;
-	uint8_t rmtl[EVP_MAX_MD_SIZE];
 	uint32_t address_len = ADRS_ADDR_SIZE;
 	uint8_t address[32] = { 0 };
-	uint8_t *adrs_msg_buffer;
+	uint8_t *data_buffer;
+	uint32_t sep_len;
+	uint32_t dbuff_len_no_msg = 0;
+	uint32_t dbuff_len_w_msg = 0;
+	uint8_t ctx_len = 0;
+	uint8_t* rmtl_buff;
 
 	if ((params == NULL) || (rand == NULL) || (rand_len == 0)
 	    || (msg_buffer == NULL) || (msg_len == 0) || (hash == NULL)
@@ -338,8 +351,10 @@ uint8_t spx_mtl_node_set_hash_message(void *params,
 		LOG_ERROR("Null parameters");
 		return 1;
 	}
-	// PRF_msg operation from draft-harvey-cfrg-mtl-mode-00 Section 5.1 
-	// R_mtl = PRF_msg(SK.prf, OptRand, ADRS || M)
+	// PRF_msg operation from draft-harvey-cfrg-mtl-mode-03 Section 5.1
+	// sep = octet(MTL_MSG_SEP) || octet(OLEN(ctx)) || ctx 
+	// R_mtl = PRF_msg(SK.prf, OptRand, sep || ADRS || M)
+	// Note: M is optional in R_mtl
 	// Section 5.1 and 5.2 of the draft specify the use of ADRS
 	// Later section 10.X does not call this out because it is assumed
 	// to be included in the message buffer at that point.
@@ -347,49 +362,75 @@ uint8_t spx_mtl_node_set_hash_message(void *params,
 	address_len =
 	    mtlns_adrs_full((uint8_t *) & address, SPX_ADRS_MTL_MSG, sid,
 			    0, node_id);
-	adrs_msg_buffer = malloc(msg_len + address_len);
-	memcpy(adrs_msg_buffer, address, address_len);
-	memcpy(adrs_msg_buffer + address_len, msg_buffer, msg_len);
 
-	switch (algorithm) {
-	case SPX_MTL_SHA2:
-		if (spx_mtl_node_set_prf_msg_sha2(spx_prop->prf.data,
-						  spx_prop->prf.length, rand,
-						  rand_len, adrs_msg_buffer,
-						  msg_len + address_len,
-						  rmtl, hash_len) != 0) {
-			LOG_ERROR("Unable to generate message prf")
+	if(ctx != NULL) {
+		ctx_len = strlen(ctx);
+	}
+
+	// MTL Message Separator from draft-harvey-cfrg-mtl-mode-03 section 4.1
+	// octet(MTL_MSG_SEP) || octet(OLEN(ctx)) || ctx || value
+	// Buffer is the sep || ADRS || M
+	sep_len = 2 + ctx_len;
+	dbuff_len_no_msg = sep_len + address_len;
+	dbuff_len_w_msg = dbuff_len_no_msg + msg_len;
+
+	data_buffer = malloc(dbuff_len_w_msg);
+	data_buffer[0] = MTL_MSG_SEP;
+	data_buffer[1] = ctx_len;
+	if(ctx_len > 0) {
+		memcpy(data_buffer + 2, ctx, ctx_len);
+	}
+	memcpy(data_buffer + sep_len, address, address_len);
+	memcpy(data_buffer + sep_len + address_len, msg_buffer, msg_len);   
+
+	if(*rmtl_len == 0) {
+		*rmtl_len = hash_len;
+		rmtl_buff = calloc(1, EVP_MAX_MD_SIZE);
+		switch (algorithm) {
+			case SPX_MTL_SHA2:
+				if (spx_mtl_node_set_prf_msg_sha2(spx_prop->prf.data,
+								spx_prop->prf.length, rand,
+								rand_len, data_buffer,
+								dbuff_len_no_msg,
+								rmtl_buff, hash_len) != 0) {
+					LOG_ERROR("Unable to generate message prf")
+				}
+				break;
+			case SPX_MTL_SHAKE:
+				if (spx_mtl_node_set_prf_msg_shake(spx_prop->prf.data,
+								spx_prop->prf.length, rand,
+								rand_len, data_buffer,
+								dbuff_len_no_msg, rmtl_buff,
+								hash_len) != 0) {
+					LOG_ERROR("Unable to generate message prf")
+				}
+				break;
+			default:
+				LOG_ERROR("Invalid hash algorithm");
+				free(rmtl_buff);
+				rmtl_buff = NULL;
 		}
-		break;
-	case SPX_MTL_SHAKE:
-		if (spx_mtl_node_set_prf_msg_shake(spx_prop->prf.data,
-						   spx_prop->prf.length, rand,
-						   rand_len, adrs_msg_buffer,
-						   msg_len + address_len, rmtl,
-						   hash_len) != 0) {
-			LOG_ERROR("Unable to generate message prf")
-		}
-		break;
-	default:
-		LOG_ERROR("Invalid hash algorithm")
+		*rmtl = rmtl_buff;
+	} else {		
+		rmtl_buff = *rmtl;
 	}
 
 	// Signer operations from draft-harvey-cfrg-mtl-mode-00 Section 5.1 
 	// data_value = H_msg_mtl(R_mtl, PK.seed, PK.root, ADRS || M)
 	memset(hash, 0, EVP_MAX_MD_SIZE);
 	buffer_len =
-	    rand_len + spx_prop->pk_seed.length + spx_prop->pk_root.length +
-	    msg_len;
+	    *rmtl_len + spx_prop->pk_seed.length + spx_prop->pk_root.length +
+	    dbuff_len_w_msg;
 	buffer = malloc(buffer_len + EVP_MAX_MD_SIZE);
 	buffer_offset = 0;
 
-	BUFFER_APPEND(buffer, buffer_offset, rand, rand_len);
+	BUFFER_APPEND(buffer, buffer_offset, rmtl_buff, *rmtl_len);
 	BUFFER_APPEND(buffer, buffer_offset,
 		      spx_prop->pk_seed.seed, spx_prop->pk_seed.length);
 	BUFFER_APPEND(buffer, buffer_offset,
 		      spx_prop->pk_root.key, spx_prop->pk_root.length);
-	BUFFER_APPEND(buffer, buffer_offset, adrs_msg_buffer,
-	          msg_len + address_len);
+	BUFFER_APPEND(buffer, buffer_offset, data_buffer,
+	          dbuff_len_w_msg);
 
 	switch (algorithm) {
 	case SPX_MTL_SHA2:
@@ -404,8 +445,8 @@ uint8_t spx_mtl_node_set_hash_message(void *params,
 			tmp_hash_len = 64;
 		}
 
-		buffer_len = rand_len + spx_prop->pk_seed.length + tmp_hash_len;
-		buffer_offset = rand_len + spx_prop->pk_seed.length;
+		buffer_len = *rmtl_len + spx_prop->pk_seed.length + tmp_hash_len;
+		buffer_offset = *rmtl_len + spx_prop->pk_seed.length;
 		BUFFER_APPEND(buffer, buffer_offset, &hash[0], tmp_hash_len);
 
 		memset(hash, 0, EVP_MAX_MD_SIZE);
@@ -428,7 +469,7 @@ uint8_t spx_mtl_node_set_hash_message(void *params,
 		break;
 	}
 
-	free(adrs_msg_buffer);
+	free(data_buffer);
 	return 0;
 }
 
@@ -442,6 +483,9 @@ uint8_t spx_mtl_node_set_hash_message(void *params,
  * @param msg_len:    Length of the msg_buffer array
  * @param hash:       Pointer to byte array where hash is stored
  * @param hash_len:   Length of hash byte array
+ * @param ctx:        MTL signature context string
+ * @param rmtl       Generated randomness bytes for the hash
+ * @param rmtl_len   Length of the randomness bytes 
  * @return 0 if successful
  */
 uint8_t spx_mtl_node_set_hash_message_sha2(void *params,
@@ -451,12 +495,13 @@ uint8_t spx_mtl_node_set_hash_message_sha2(void *params,
 					   uint32_t rand_len,
 					   uint8_t * msg_buffer,
 					   uint32_t msg_len, uint8_t * hash,
-					   uint32_t hash_len)
+					   uint32_t hash_len, char * ctx,
+					   uint8_t ** rmtl, uint32_t * rmtl_len)
 {
 	return spx_mtl_node_set_hash_message(params, sid, node_id, rand,
 					     rand_len, msg_buffer,
-					     msg_len, hash, hash_len,
-					     SPX_MTL_SHA2);
+					     msg_len, hash, hash_len, ctx, 
+						 rmtl, rmtl_len, SPX_MTL_SHA2);
 }
 
 /*****************************************************************
@@ -469,6 +514,9 @@ uint8_t spx_mtl_node_set_hash_message_sha2(void *params,
  * @param msg_len:    Length of the msg_buffer array
  * @param hash:       Pointer to byte array where hash is stored
  * @param hash_len:   Length of hash byte array
+ * @param ctx:        MTL signature context string 
+ * @param rmtl       Generated randomness bytes for the hash
+ * @param rmtl_len   Length of the randomness bytes  
  * @return 0 if successful
  */
 uint8_t spx_mtl_node_set_hash_message_shake(void *params,
@@ -478,12 +526,13 @@ uint8_t spx_mtl_node_set_hash_message_shake(void *params,
 					    uint32_t rand_len,
 					    uint8_t * msg_buffer,
 					    uint32_t msg_len, uint8_t * hash,
-					    uint32_t hash_len)
+					    uint32_t hash_len, char * ctx,
+						uint8_t ** rmtl, uint32_t * rmtl_len)
 {
 	return spx_mtl_node_set_hash_message(params, sid, node_id, rand,
 					     rand_len, msg_buffer,
-					     msg_len, hash, hash_len,
-					     SPX_MTL_SHAKE);
+					     msg_len, hash, hash_len, ctx,
+					     rmtl, rmtl_len, SPX_MTL_SHAKE);
 }
 
 /*****************************************************************
@@ -526,13 +575,13 @@ uint8_t spx_mtl_node_set_hash_leaf(void *params,
 		// Create address structure (Compressed)
 		ADRSLen =
 		    mtlns_adrs_compressed((uint8_t *) & ADRS, SPX_ADRS_MTL_DATA,
-					  sid, node_id, node_id);
+					  sid, 0, node_id);
 		break;
 	case SPX_MTL_SHAKE:
 		// Create address structure (Full)
 		ADRSLen =
 		    mtlns_adrs_full((uint8_t *) & ADRS, SPX_ADRS_MTL_DATA, sid,
-				    node_id, node_id);
+				    0, node_id);
 		break;
 	default:
 		LOG_ERROR("Invalid hashing algorithm");

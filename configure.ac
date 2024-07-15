@@ -1,6 +1,6 @@
 AM_CFLAGS="-Wall -O0 -g"
 
-AC_INIT([mtllib], [1.0], [jsharvey@verisign.com])
+AC_INIT([mtllib], [1.1], [jsharvey@verisign.com])
 AC_CONFIG_SRCDIR([src])
 AC_CONFIG_HEADERS([config.h])
 AM_INIT_AUTOMAKE([-Wall -Werror foreign])

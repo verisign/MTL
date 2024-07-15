@@ -30,26 +30,24 @@
 	ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 	POSSIBILITY OF SUCH DAMAGE.
 */
-/**
- *  \file mtl_error.h
- *  \brief MTL macro functions that can report macros or disable error reporting.
-*/
-#ifndef __MTL_ERROR_H__
-#define __MTL_ERROR_H__
+#ifndef __MTL_VERBOSE_OUTPUT_H__
+#define __MTL_VERBOSE_OUTPUT_H__
 
-#include <stdio.h>
+#include "mtl.h"
+#include "mtltool.h"
+#include "mtlverify.h"
 
-// #definitions
-/** Definition declaring logging is on by default (1) - Remove or undeclare to stop error logging. */
-#define MTL_DEBUG_LOG 1
+#define MAX_BUFFER_SIZE 65535
 
-#if MTL_DEBUG_LOG == 1
-/** Logging Function Macro definition */
-#define LOG_ERROR(msg)  if(1) {fprintf(stderr,"\x1B[31m    "\
-                               "ERROR (%s:%s:%d): %s\x1B[0m\n",\
-                               __FILE__,__FUNCTION__,__LINE__,msg);}
-#else
-#define LOG_ERROR(msg)
-#endif
+size_t mtl_buffer2bin(uint8_t* input, size_t input_len, uint8_t** output, data_encoding encoding);
+ALGORITHM *get_underlying_signature(char *algo_str, ALGORITHM* algos);
+char *mtl_str2upper(char *data);
+void mtl_print_auth_path(AUTHPATH* auth_path, RANDOMIZER* mtl_rand, uint32_t hash_len, FILE *stream);
+void mtl_print_ladder(LADDER* ladder, FILE *stream);
+void mtl_print_ladder_signature(uint8_t* sig, size_t sig_len, FILE* stream);
+void mtl_print_rung(RUNG* rung, FILE* stream);
+void mtl_print_message(uint8_t* message, uint32_t message_len, FILE* stream);
+void mtl_print_signature_scheme(ALGORITHM* algo, FILE* stream);
+void mtl_print_mtl_buffer(char* label, uint8_t *buffer, uint32_t buffer_length, FILE* stream);
 
-#endif				// __MTL_ERROR_H
+#endif  // __MTL_VERBOSE_OUTPUT_H__
