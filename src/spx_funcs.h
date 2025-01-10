@@ -1,5 +1,5 @@
 /*
-	Copyright (c) 2023, VeriSign, Inc.
+	Copyright (c) 2024, VeriSign, Inc.
 	All rights reserved.
 
 	Redistribution and use in source and binary forms, with or without
@@ -30,6 +30,13 @@
 	ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 	POSSIBILITY OF SUCH DAMAGE.
 */
+/**
+ *  \file spx_funcs.h
+ *  \brief General wrapper functions for hashing or padding
+ *  General functions for hashing or padding operations. These functions 
+ *  adopt a simple interface so that they are easy to replace if a specific 
+ *  implementation is desired for a specific library or target platform.
+*/
 #ifndef __SPX_FUNCS_H__
 #define __SPX_FUNCS_H__
 
@@ -37,18 +44,70 @@
 #include <stdint.h>
 
 // Definitions
-#define SHA2_256_BLOCK_SIZE 32
-#define SHA2_512_BLOCK_SIZE 64
+/** Byte size of a SHA2_256 hash */ 
+#define SHA2_256_BLOCK_SIZE 64
+/** Byte size of a SHA2_512 hash */ 
+#define SHA2_512_BLOCK_SIZE 128
 
 // Function Prototypes
+/**
+ * Block Pad data
+ * @param data:      Byte array of data to pad
+ * @param data_len:  Length of the data to pad
+ * @param block_len: Block size to use for padding
+ * @param buffer:    Byte array output
+ * @return total size of padded data
+ */
 uint32_t block_pad(uint8_t * data, uint32_t data_len, uint32_t block_len,
 		   uint8_t ** buffer);
+
+/**
+ * MGF1 function for SHA-256 hash function
+ * @param out     Padded output buffer
+ * @param out_len: Size of the output buffer
+ * @param in:      Input buffer
+ * @param in_len:  Size of the input buffer
+ * @return none
+ */		   
 void mgf1_256(unsigned char *out, unsigned long outlen,
 	      const unsigned char *in, unsigned long inlen);
+
+/**
+ * MGF1 function for SHA-512 hash function
+ * @param out:     Padded output buffer
+ * @param out_len: Size of the output buffer
+ * @param in:      Input buffer
+ * @param in_len:  Size of the input buffer
+ * @return none
+ */		  
 void mgf1_512(unsigned char *out, unsigned long outlen,
 	      const unsigned char *in, unsigned long inlen);
+
+/**
+ * SHA256 Hash Function - Based on OpenSSL EVP API
+ * @param out:     output hash buffer
+ * @param in:      Input buffer
+ * @param in_len:  Size of the input buffer
+ * @return none
+ */		  
 void sha256(uint8_t * out, const uint8_t * in, size_t inlen);
+
+/**
+ * SHA512 Hash Function - Based on OpenSSL EVP API
+ * @param out:     output hash buffer
+ * @param in:      Input buffer
+ * @param in_len:  Size of the input buffer
+ * @return none
+ */
 void sha512(uint8_t * out, const uint8_t * in, size_t inlen);
+
+/**
+ * SHAKE256 Hash Function - Based on OpenSSL EVP API
+ * @param out:     output hash buffer
+ * @param in:      Input buffer
+ * @param in_len:  Size of the input buffer
+ * @return none
+ */
 void shake256(uint8_t * out, const uint8_t * in, size_t inlen, size_t hash_len);
 
 #endif				//__SPX_FUNCS_H__

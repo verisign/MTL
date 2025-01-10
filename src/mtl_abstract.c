@@ -1,5 +1,5 @@
 /*
-	Copyright (c) 2023, VeriSign, Inc.
+	Copyright (c) 2024, VeriSign, Inc.
 	All rights reserved.
 
 	Redistribution and use in source and binary forms, with or without
@@ -118,9 +118,10 @@ uint32_t mtl_hash_and_append(MTL_CTX * ctx, uint8_t * message,
 			     uint16_t message_len)
 {
 	uint32_t leaf_index = 0;
-	// uint8_t *random_buffer;
 	uint8_t hash[EVP_MAX_MD_SIZE];
 	RANDOMIZER *mtl_random;
+	uint8_t* rmtl_ptr = NULL;
+	uint32_t rmtl_len = 0;
 
 	if ((ctx == NULL) || (message == NULL) || message_len == 0) {
 		LOG_ERROR("NULL Input Pointers");
@@ -140,7 +141,8 @@ uint32_t mtl_hash_and_append(MTL_CTX * ctx, uint8_t * message,
 		if (ctx->hash_msg(ctx->sig_params, &ctx->sid, leaf_index,
 				  mtl_random->value, mtl_random->length,
 				  message, message_len, &hash[0],
-				  ctx->nodes.hash_size) != 0) {
+				  ctx->nodes.hash_size, ctx->ctx_str,
+				  &rmtl_ptr, &rmtl_len) != 0) {
 			LOG_ERROR("Unable to hash leaf node");
 			mtl_randomizer_free(mtl_random);
 			return 0xffffffff;
@@ -150,8 +152,9 @@ uint32_t mtl_hash_and_append(MTL_CTX * ctx, uint8_t * message,
 	}
 
 	mtl_node_set_insert_randomizer(&ctx->nodes, leaf_index,
-				       mtl_random->value);
+				       rmtl_ptr);
 
+	free(rmtl_ptr);
 	mtl_randomizer_free(mtl_random);
 
 	// Insert the leaf in the MTL node set
@@ -214,6 +217,9 @@ uint8_t mtl_hash_and_verify(MTL_CTX * ctx, uint8_t * message,
 {
 	uint32_t leaf_index = 0;
 	uint8_t data_value[EVP_MAX_MD_SIZE];
+	uint8_t rmtl[EVP_MAX_MD_SIZE];
+	uint8_t *rmtl_ptr = &rmtl[0];
+	uint32_t rmtl_len = 0;
 
 	if ((ctx == NULL) || (message == NULL) || (message_len == 0)
 	    || (auth_path == NULL) || (randomizer == NULL)
@@ -223,13 +229,17 @@ uint8_t mtl_hash_and_verify(MTL_CTX * ctx, uint8_t * message,
 
 	leaf_index = auth_path->leaf_index;
 
+	rmtl_len = randomizer->length;
+	memcpy(rmtl_ptr, randomizer->value, randomizer->length);
+
 	// mtl_authpath from draft-harvey-cfrg-mtl-mode-00 Section 8.8
 	// Randomize the message digest
 	if (ctx->hash_msg != NULL) {
 		if (ctx->hash_msg(ctx->sig_params, &ctx->sid, leaf_index,
 				  randomizer->value, randomizer->length,
 				  message, message_len, &data_value[0],
-				  ctx->nodes.hash_size) != 0) {
+				  ctx->nodes.hash_size, ctx->ctx_str,
+				  &rmtl_ptr, &rmtl_len) != 0) {
 			LOG_ERROR("Unable to hash leaf node");
 		}
 	} else {
@@ -248,33 +258,46 @@ uint8_t mtl_hash_and_verify(MTL_CTX * ctx, uint8_t * message,
  * @param ladder: ladder buffer pointer
  * @param hash_size: size of the hash in bytes
  * @param buffer: pointer to output buffer 
+ * @param oid: pointer to the MTL_OID that represents the signature
+ * @param oid_len: length of the oid in bytes
  * @return buffer size
  */
 uint32_t mtl_get_scheme_separated_buffer(MTL_CTX * ctx, LADDER * ladder,
-					 uint32_t hash_size, uint8_t ** buffer)
+					 uint32_t hash_size, uint8_t ** buffer, uint8_t* oid,
+					 size_t oid_len)
 {
 	uint32_t ladder_buffer_size = 0;
 	uint8_t *ladder_buffer = NULL;
-	uint32_t address_len = ADRS_ADDR_SIZE_C;
-	uint8_t address[32] = { 0 };
 	uint8_t *underlying_buffer = NULL;
+	size_t sep_size;
+	uint8_t ctx_str_len = 0;
 
 	// Ladder to buffer
 	ladder_buffer_size =
 	    mtl_ladder_to_buffer(ladder, hash_size, &ladder_buffer);
 
-	// Address Scheme Separation from from draft-harvey-cfrg-mtl-mode-00 Section 4.5
-	// Create address structure (Full)
-	address_len =
-	    mtlns_adrs_full((uint8_t *) & address, SPX_ADRS_MTL_DATA, &ctx->sid,
-			    0, 0);
-	// Sign ADRS + Ladder_Bytes
-	underlying_buffer = malloc(ladder_buffer_size + address_len);
-	memcpy(underlying_buffer, address, address_len);
-	memcpy(underlying_buffer + address_len, ladder_buffer,
+	// Address Scheme Separation from draft-harvey-cfrg-mtl-mode-00 Section 4.5
+	// Separator from from draft-harvey-cfrg-mtl-mode-03 Section 4.1
+	// sep = octet(MTL_LADDER_SEP) || octet(OLEN(ctx)) || ctx || OID_MTL || ladder
+
+	if(ctx->ctx_str != NULL) {
+		ctx_str_len = strlen(ctx->ctx_str);
+	}
+
+	sep_size = 2 + ctx_str_len + oid_len;
+
+	// Sign SEP + Ladder_Bytes
+	underlying_buffer = malloc(ladder_buffer_size + sep_size);
+	underlying_buffer[0] = MTL_LADDER_SEP;
+	underlying_buffer[1] = ctx_str_len;
+	if(ctx_str_len > 0) {
+		memcpy(underlying_buffer + 2, ctx->ctx_str, strlen(ctx->ctx_str));
+	}
+	memcpy(underlying_buffer + 2 + ctx_str_len, oid, oid_len);
+	memcpy(underlying_buffer + sep_size, ladder_buffer,
 	       ladder_buffer_size);
 	free(ladder_buffer);
 
 	*buffer = underlying_buffer;
-	return ladder_buffer_size + address_len;
+	return ladder_buffer_size + sep_size;
 }

@@ -1,5 +1,5 @@
 /*
-	Copyright (c) 2023, VeriSign, Inc.
+	Copyright (c) 2024, VeriSign, Inc.
 	All rights reserved.
 
 	Redistribution and use in source and binary forms, with or without
@@ -98,7 +98,7 @@ uint8_t mtltest_mtl_node_set_init(void)
 	sid.length = 8;
 	memcpy(sid.id, sid_val, sid.length);
 
-	mtl_node_set_init(&nodes, seed, &sid);
+	mtl_node_set_init(&nodes, &seed, &sid);
 
 	assert(nodes.leaf_count == 0);
 	assert(nodes.hash_size == seed.length);
@@ -143,7 +143,7 @@ uint8_t mtltest_mtl_node_set_init_null(void)
 	seed.length = 32;
 	memcpy(seed.seed, seed_val, seed.length);
 
-	mtl_node_set_init(NULL, seed, &sid);
+	mtl_node_set_init(NULL, &seed, &sid);
 	// Verifying that this doesn't crash or cause strange behaviors
 
 	return 0;
@@ -172,7 +172,7 @@ uint8_t mtltest_mtl_node_set_insert(void)
 	sid.length = 8;
 	memcpy(sid.id, sid_val, sid.length);
 
-	mtl_node_set_init(&nodes, seed, &sid);
+	mtl_node_set_init(&nodes, &seed, &sid);
 
 	assert(nodes.leaf_count == 0);
 	assert(nodes.hash_size == seed.length);
@@ -270,7 +270,7 @@ uint8_t mtltest_mtl_node_set_fetch(void)
 	sid.length = 0;
 	memcpy(sid.id, sid_val, sid.length);
 
-	mtl_node_set_init(&nodes, seed, &sid);
+	mtl_node_set_init(&nodes, &seed, &sid);
 
 	assert(nodes.leaf_count == 0);
 	assert(nodes.hash_size == seed.length);
@@ -334,7 +334,7 @@ uint8_t mtltest_mtl_node_set_get_randomizer(void)
 	sid.length = 0;
 	memcpy(sid.id, sid_val, sid.length);
 
-	mtl_node_set_init(&nodes, seed, &sid);
+	mtl_node_set_init(&nodes, &seed, &sid);
 
 	assert(nodes.leaf_count == 0);
 	assert(nodes.hash_size == seed.length);
@@ -387,7 +387,7 @@ uint8_t mtltest_mtl_node_set_get_randomizer_null(void)
 	sid.length = 0;
 	memcpy(sid.id, sid_val, sid.length);
 
-	mtl_node_set_init(&nodes, seed, &sid);
+	mtl_node_set_init(&nodes, &seed, &sid);
 
 	assert(nodes.leaf_count == 0);
 	assert(nodes.hash_size == seed.length);

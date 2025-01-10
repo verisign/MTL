@@ -1,5 +1,5 @@
 /*
-	Copyright (c) 2023, VeriSign, Inc.
+	Copyright (c) 2024, VeriSign, Inc.
 	All rights reserved.
 
 	Redistribution and use in source and binary forms, with or without
@@ -30,6 +30,11 @@
 	ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 	POSSIBILITY OF SUCH DAMAGE.
 */
+/**
+ *  \file mtl_util.h
+ *  \brief MTL Mode integer utility functions.
+ * Functions for converting between MTL buffer bytes and unsigned integers
+*/
 #ifndef __MTL_UTIL_H__
 #define __MTL_UTIL_H__
 
@@ -37,12 +42,40 @@
 #include <stdint.h>
 
 // Definitions
+/** Macro for testing if the platform uses big or little endian */
 #define BIG_ENDIAN_PLATFORM (!*(uint8_t *)&(uint16_t){1})
 
 // Function Prototypes
+/**
+ * Convert a 32 bit unsigned integer to bit endian bytes
+ * @param buffer     Byte array output
+ * @param value      Unsigned 32 bit integer to convert
+ * @return number of bytes for output
+ */
 uint16_t uint32_to_bytes(unsigned char *buffer, uint32_t value);
+
+/**
+ * Convert a 16 bit unsigned integer to bit endian bytes
+ * @param buffer     Byte array output
+ * @param value      Unsigned 316 bit integer to convert
+ * @return number of bytes for output
+ */
 uint16_t uint16_to_bytes(unsigned char *buffer, uint16_t value);
+
+/**
+ * Convert a 32 bit endian byte array to unsigned integer
+ * @param buffer     Byte array input
+ * @param value      Unsigned 32 bit integer result
+ * @return number of bytes for input
+ */
 uint16_t bytes_to_uint32(unsigned char *buffer, uint32_t * value);
+
+/**
+ * Convert a 16 bit endian byte array to unsigned integer
+ * @param buffer     Byte array input
+ * @param value      Unsigned 16 bit integer result
+ * @return number of bytes for input
+ */
 uint16_t bytes_to_uint16(unsigned char *buffer, uint16_t * value);
 
 #endif				//__MTL_UTIL_H__

@@ -1,5 +1,5 @@
 # MTL SCHEMES
-The following signature schemes are suported by this library:
+The following signature schemes are supported by this library:
 
 ## Supported algorithm strings
 * SPHINCS+-MTL-SHAKE-128S-SIMPLE

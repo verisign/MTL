@@ -1,5 +1,5 @@
 /*
-	Copyright (c) 2023, VeriSign, Inc.
+	Copyright (c) 2024, VeriSign, Inc.
 	All rights reserved.
 
 	Redistribution and use in source and binary forms, with or without
@@ -51,6 +51,8 @@ typedef struct ALGORITHM {
 	char opt;
 	uint8_t algo;
 	char *oqs_str;
+	uint8_t oid_len;
+	uint8_t oid[16];
 } ALGORITHM;
 
 typedef struct QUEUE_NODE {
@@ -59,11 +61,10 @@ typedef struct QUEUE_NODE {
 } QUEUE_NODE;
 
 // Function Prototypes
-ALGORITHM *get_underlying_signature(char *algo_str);
 uint8_t sign_records(FILE * input, FILE * output, MTL_CTX * ctx,
-		     char *oqs_str, uint8_t * sk);
+		     char *oqs_str, uint8_t * sk, uint8_t* oid, size_t oid_len);
 uint8_t verify_records(FILE * input, int signfd, MTL_CTX * ctx,
-		       char *oqs_str, uint8_t * pk);
-uint8_t new_key(char *keystr, char *keyfilename);
+		       char *oqs_str, uint8_t * pk, uint8_t* oid, size_t oid_len);
+uint8_t new_key(char *keystr, char *keyfilename, char* ctx_str);
 
 #endif

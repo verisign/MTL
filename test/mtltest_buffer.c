@@ -1,5 +1,5 @@
 /*
-	Copyright (c) 2023, VeriSign, Inc.
+	Copyright (c) 2024, VeriSign, Inc.
 	All rights reserved.
 
 	Redistribution and use in source and binary forms, with or without
@@ -87,7 +87,7 @@ uint8_t mtltest_auth_path_from_buffer(void)
 	uint16_t result_len = 72;
 
 	// Randomizer
-	assert(mtl_auth_path_from_buffer(result, hash_len, 8, &mtl_rand, &auth)
+	assert(mtl_auth_path_from_buffer(result, result_len, hash_len, 8, &mtl_rand, &auth)
 	       == result_len);
 	assert(auth->flags == 0x55);
 	assert(auth->sid.length == 8);
@@ -105,14 +105,14 @@ uint8_t mtltest_auth_path_from_buffer(void)
 	free(mtl_rand);
 
 	// NULL parameters
-	assert(mtl_auth_path_from_buffer(NULL, hash_len, 8, &mtl_rand, &auth) ==
+	assert(mtl_auth_path_from_buffer(NULL, 0, hash_len, 8, &mtl_rand, &auth) ==
 	       0);
-	assert(mtl_auth_path_from_buffer(result, 0, 8, &mtl_rand, &auth) == 0);
-	assert(mtl_auth_path_from_buffer(result, hash_len, 0, &mtl_rand, &auth)
+	assert(mtl_auth_path_from_buffer(result, result_len, 0, 8, &mtl_rand, &auth) == 0);
+	assert(mtl_auth_path_from_buffer(result, result_len, hash_len, 0, &mtl_rand, &auth)
 	       == 0);
-	assert(mtl_auth_path_from_buffer(result, hash_len, 8, NULL, &auth) ==
+	assert(mtl_auth_path_from_buffer(result, result_len, hash_len, 8, NULL, &auth) ==
 	       0);
-	assert(mtl_auth_path_from_buffer(result, hash_len, 8, &mtl_rand, NULL)
+	assert(mtl_auth_path_from_buffer(result, result_len, hash_len, 8, &mtl_rand, NULL)
 	       == 0);
 
 	return 0;
@@ -199,7 +199,7 @@ uint8_t mtltest_ladder_from_buffer(void)
 		0x19, 0x99, 0xf1, 0x4b, 0xa8, 0x0c, 0x94, 0x95
 	};
 
-	assert(mtl_ladder_from_buffer(ladder_buffer, hash_len, 8, &ladder) ==
+	assert(mtl_ladder_from_buffer(ladder_buffer, ladder_buffer_len, hash_len, 8, &ladder) ==
 	       ladder_buffer_len);
 	assert(ladder->flags == 0x55);
 	assert(ladder->sid.length == 8);
@@ -215,11 +215,11 @@ uint8_t mtltest_ladder_from_buffer(void)
 
 
 	// NULL parameters
-	assert(mtl_ladder_from_buffer(NULL, hash_len, 8, &ladder) == 0);
-	assert(mtl_ladder_from_buffer(ladder_buffer, 0, 8, &ladder) == 0);
-	assert(mtl_ladder_from_buffer(ladder_buffer, hash_len, 0, &ladder) ==
+	assert(mtl_ladder_from_buffer(NULL, 0, hash_len, 8, &ladder) == 0);
+	assert(mtl_ladder_from_buffer(ladder_buffer, ladder_buffer_len, 0, 8, &ladder) == 0);
+	assert(mtl_ladder_from_buffer(ladder_buffer, ladder_buffer_len, hash_len, 0, &ladder) ==
 	       0);
-	assert(mtl_ladder_from_buffer(ladder_buffer, hash_len, 8, NULL) == 0);
+	assert(mtl_ladder_from_buffer(ladder_buffer, ladder_buffer_len, hash_len, 8, NULL) == 0);
 
 	return 0;
 }

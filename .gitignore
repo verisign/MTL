@@ -118,3 +118,9 @@ Makefile
 
 # Ignore examples tem files
 examples/tmp/**
+
+# Ignore generated documentation
+docs/html/**
+docs/latex/**
+
+src/.libs/*

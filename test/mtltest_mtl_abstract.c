@@ -1,5 +1,5 @@
 /*
-	Copyright (c) 2023, VeriSign, Inc.
+	Copyright (c) 2024, VeriSign, Inc.
 	All rights reserved.
 
 	Redistribution and use in source and binary forms, with or without
@@ -91,7 +91,7 @@ uint8_t mtltest_mtl_generate_randomizer(void)
 	pk_seed.length = 32;
 	memset(pk_seed.seed, 0x55, 32);
 
-	assert(mtl_initns(&mtl_ctx, pk_seed, &sid) == MTL_OK);
+	assert(mtl_initns(&mtl_ctx, &pk_seed, &sid, NULL) == MTL_OK);
 
 	// Check that the seed is used for the randomizer
 	mtl_ctx->randomize = 0;
@@ -133,19 +133,17 @@ uint8_t mtltest_mtl_get_scheme_separated_buffer(void)
 		0x6b, 0x0c, 0xef, 0xbf, 0x93, 0x49, 0xcb, 0xc8,
 		0xb0, 0x40, 0xe3, 0xb5, 0x5a, 0xc2, 0xda, 0x91
 	};
-	uint8_t results[] =
-	    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xaa,
-		0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0x00,
-		0x00, 0x00, 0x11, 0x00, 0x00, 0x00, 0x00, 0x00,
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-		0x00, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa,
-		0xaa, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00,
-		0x00, 0x00, 0x03, 0x0e, 0xea, 0xdb, 0x7e, 0x93,
-		0x86, 0xf7, 0xce, 0x6a, 0x24, 0x70, 0x8f, 0xc1,
-		0x38, 0xfd, 0x72, 0x6b, 0x0c, 0xef, 0xbf, 0x93,
-		0x49, 0xcb, 0xc8, 0xb0, 0x40, 0xe3, 0xb5, 0x5a,
-		0xc2, 0xda, 0x91
+	uint8_t results[] = 
+		{ 0x81, 0x00, 0x2b, 0xce, 0x0f, 0x06, 0x0a, 0x10,
+		0x00, 0x00, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa,
+		0xaa, 0xaa, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x03, 0x0e, 0xea, 0xdb, 0x7e,
+		0x93, 0x86, 0xf7, 0xce, 0x6a, 0x24, 0x70, 0x8f,
+		0xc1, 0x38, 0xfd, 0x72, 0x6b, 0x0c, 0xef, 0xbf,
+		0x93, 0x49, 0xcb, 0xc8, 0xb0, 0x40, 0xe3, 0xb5,
+		0x5a, 0xc2, 0xda, 0x91
 	};
+	uint8_t oid[] = {0x2B, 0xCE, 0x0F, 0x06, 0x0A, 0x10 };
 
 	memset(&sid, 0xAA, sizeof(SERIESID));
 	sid.length = 8;
@@ -154,7 +152,7 @@ uint8_t mtltest_mtl_get_scheme_separated_buffer(void)
 	pk_seed.length = 32;
 	memset(pk_seed.seed, 0x55, 32);
 
-	assert(mtl_initns(&mtl_ctx, pk_seed, &sid) == MTL_OK);
+	assert(mtl_initns(&mtl_ctx, &pk_seed, &sid, NULL) == MTL_OK);
 
 	ladder = mtl_ladder(mtl_ctx);
 	ladder->flags = 0;
@@ -169,9 +167,10 @@ uint8_t mtltest_mtl_get_scheme_separated_buffer(void)
 	ladder->rungs->hash_length = 32;
 	memcpy(ladder->rungs->hash, rung_data, 32);
 
-	assert(mtl_get_scheme_separated_buffer(mtl_ctx, ladder, 32, &buffer) ==
-	       84);
-	assert(memcmp(buffer, results, 84) == 0);
+	assert(mtl_get_scheme_separated_buffer(mtl_ctx, ladder, 32, &buffer, 
+	    &oid[0], 6) == 60);		
+	assert(memcmp(buffer, results, 60) == 0);
+	assert(memcmp(buffer+2, oid, 6) == 0);
 
 	assert(mtl_ladder_free(ladder) == MTL_OK);
 	assert(mtl_free(mtl_ctx) == MTL_OK);
@@ -189,7 +188,7 @@ uint8_t mtltest_mtl_hash_and_append(void)
 	MTL_CTX *mtl_ctx = NULL;
 	char message_buffer[32];
 	uint16_t index;
-	SPX_PARAMS params;
+	static const SPX_PARAMS params;
 
 	memset(&sid, 0, sizeof(SERIESID));
 	sid.length = 8;
@@ -198,11 +197,11 @@ uint8_t mtltest_mtl_hash_and_append(void)
 	pk_seed.length = 32;
 	memset(pk_seed.seed, 0x55, 32);
 
-	assert(mtl_initns(&mtl_ctx, pk_seed, &sid) == MTL_OK);
-	assert(mtl_set_scheme_functions(mtl_ctx, &params, 0,
+	assert(mtl_initns(&mtl_ctx, &pk_seed, &sid, NULL) == MTL_OK);
+	assert(mtl_set_scheme_functions(mtl_ctx, (void*)&params, 0,
 					mtl_test_hash_msg,
 					mtl_test_hash_leaf,
-					mtl_test_hash_node) == MTL_OK);
+					mtl_test_hash_node, NULL) == MTL_OK);
 
 	// Verify inserting records
 	for (index = 0; index < 16; index++) {
@@ -241,7 +240,7 @@ uint8_t mtltest_mtl_hash_and_append_random(void)
 	MTL_CTX *mtl_ctx = NULL;
 	char message_buffer[32];
 	uint16_t index;
-	SPX_PARAMS params;
+	static const SPX_PARAMS params;
 
 	memset(&sid, 0, sizeof(SERIESID));
 	sid.length = 8;
@@ -250,11 +249,11 @@ uint8_t mtltest_mtl_hash_and_append_random(void)
 	pk_seed.length = 32;
 	memset(pk_seed.seed, 0x55, 32);
 
-	assert(mtl_initns(&mtl_ctx, pk_seed, &sid) == MTL_OK);
-	assert(mtl_set_scheme_functions(mtl_ctx, &params, 1,
+	assert(mtl_initns(&mtl_ctx, &pk_seed, &sid, NULL) == MTL_OK);
+	assert(mtl_set_scheme_functions(mtl_ctx, (void*)&params, 1,
 					mtl_test_hash_msg,
 					mtl_test_hash_leaf,
-					mtl_test_hash_node) == MTL_OK);
+					mtl_test_hash_node, NULL) == MTL_OK);
 
 	// Verify inserting records
 	for (index = 0; index < 16; index++) {
@@ -293,7 +292,7 @@ uint8_t mtltest_mtl_randomizer_and_authpath(void)
 	MTL_CTX *mtl_ctx = NULL;
 	char message_buffer[32];
 	uint16_t index;
-	SPX_PARAMS params;
+	static const SPX_PARAMS params;
 	RANDOMIZER *mtl_rand;
 	AUTHPATH *auth;
 
@@ -304,11 +303,11 @@ uint8_t mtltest_mtl_randomizer_and_authpath(void)
 	pk_seed.length = 32;
 	memset(pk_seed.seed, 0x55, 32);
 
-	assert(mtl_initns(&mtl_ctx, pk_seed, &sid) == MTL_OK);
-	assert(mtl_set_scheme_functions(mtl_ctx, &params, 0,
+	assert(mtl_initns(&mtl_ctx, &pk_seed, &sid, NULL) == MTL_OK);
+	assert(mtl_set_scheme_functions(mtl_ctx, (void*)&params, 0,
 					mtl_test_hash_msg,
 					mtl_test_hash_leaf,
-					mtl_test_hash_node) == MTL_OK);
+					mtl_test_hash_node, NULL) == MTL_OK);
 
 	// Insert records for verification later
 	for (index = 0; index < 16; index++) {
@@ -360,7 +359,7 @@ uint8_t mtltest_mtl_randomizer_and_authpath_random(void)
 	MTL_CTX *mtl_ctx = NULL;
 	char message_buffer[32];
 	uint16_t index;
-	SPX_PARAMS params;
+	static const SPX_PARAMS params;
 	RANDOMIZER *mtl_rand;
 	AUTHPATH *auth;
 
@@ -371,11 +370,11 @@ uint8_t mtltest_mtl_randomizer_and_authpath_random(void)
 	pk_seed.length = 32;
 	memset(pk_seed.seed, 0x55, 32);
 
-	assert(mtl_initns(&mtl_ctx, pk_seed, &sid) == MTL_OK);
-	assert(mtl_set_scheme_functions(mtl_ctx, &params, 1,
+	assert(mtl_initns(&mtl_ctx, &pk_seed, &sid, NULL) == MTL_OK);
+	assert(mtl_set_scheme_functions(mtl_ctx, (void*)&params, 1,
 					mtl_test_hash_msg,
 					mtl_test_hash_leaf,
-					mtl_test_hash_node) == MTL_OK);
+					mtl_test_hash_node, NULL) == MTL_OK);
 
 	// Insert records for verification later
 	for (index = 0; index < 16; index++) {
@@ -427,7 +426,7 @@ uint8_t mtltest_mtl_hash_and_verify(void)
 	MTL_CTX *mtl_ctx = NULL;
 	char message_buffer[32];
 	uint16_t index;
-	SPX_PARAMS params;
+	static const SPX_PARAMS params;
 	RANDOMIZER *mtl_rand;
 	AUTHPATH *auth;
 	LADDER *ladder;
@@ -440,11 +439,11 @@ uint8_t mtltest_mtl_hash_and_verify(void)
 	pk_seed.length = 32;
 	memset(pk_seed.seed, 0x55, 32);
 
-	assert(mtl_initns(&mtl_ctx, pk_seed, &sid) == MTL_OK);
-	assert(mtl_set_scheme_functions(mtl_ctx, &params, 0,
+	assert(mtl_initns(&mtl_ctx, &pk_seed, &sid, NULL) == MTL_OK);
+	assert(mtl_set_scheme_functions(mtl_ctx, (void*)&params, 0,
 					mtl_test_hash_msg,
 					mtl_test_hash_leaf,
-					mtl_test_hash_node) == MTL_OK);
+					mtl_test_hash_node, NULL) == MTL_OK);
 
 	// Insert records for verification later
 	for (index = 0; index < 16; index++) {
@@ -507,7 +506,7 @@ uint8_t mtltest_mtl_hash_and_verify_random(void)
 	MTL_CTX *mtl_ctx = NULL;
 	char message_buffer[32];
 	uint16_t index;
-	SPX_PARAMS params;
+	static const SPX_PARAMS params;
 	RANDOMIZER *mtl_rand;
 	AUTHPATH *auth;
 	LADDER *ladder;
@@ -520,11 +519,11 @@ uint8_t mtltest_mtl_hash_and_verify_random(void)
 	pk_seed.length = 32;
 	memset(pk_seed.seed, 0x55, 32);
 
-	assert(mtl_initns(&mtl_ctx, pk_seed, &sid) == MTL_OK);
-	assert(mtl_set_scheme_functions(mtl_ctx, &params, 1,
+	assert(mtl_initns(&mtl_ctx, &pk_seed, &sid, NULL) == MTL_OK);
+	assert(mtl_set_scheme_functions(mtl_ctx, (void*)&params, 1,
 					mtl_test_hash_msg,
 					mtl_test_hash_leaf,
-					mtl_test_hash_node) == MTL_OK);
+					mtl_test_hash_node, NULL) == MTL_OK);
 
 	// Insert records for verification later
 	for (index = 0; index < 16; index++) {
