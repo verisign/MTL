@@ -57,7 +57,7 @@
  * @param hash_len:    length of the hash for the scheme
  * @return 0 on success, integer on failure
  */
-uint8_t spx_mtl_node_set_prf_msg_sha2(uint8_t * skprf, uint32_t skprf_len,
+MTLSTATUS spx_mtl_node_set_prf_msg_sha2(uint8_t * skprf, uint32_t skprf_len,
 				      uint8_t * optrand, uint32_t optrand_len,
 				      uint8_t * message, uint32_t message_len,
 				      uint8_t * rmtl, uint32_t hash_len)
@@ -69,13 +69,17 @@ uint8_t spx_mtl_node_set_prf_msg_sha2(uint8_t * skprf, uint32_t skprf_len,
 
 	if ((skprf == NULL) || (skprf_len == 0) ||
 	    (optrand == NULL) || (optrand_len == 0) ||
-	    (message == NULL) || (message_len == 0) || (hash_len == 0)) {
+	    (message == NULL) || (message_len == 0) || (rmtl == NULL) || 
+		(hash_len == 0)) {
 		LOG_ERROR("Invalid parameters");
-		return 1;
+		return MTL_BAD_PARAM;
 	}
 	// SHA2 PRF_msg from draft-harvey-cfrg-mtl-mode-00 Section 10.2.2
 	// PRF_msg(SK.prf, OptRand, M) = HMAC-SHA-X(SK.prf, OptRand || M)
 	buffer = calloc(1, optrand_len + message_len);
+	if (buffer == NULL) {
+		LOG_ERROR_WITH_CODE("spx_mtl_node_set_prf_msg_sha2",MTL_RESOURCE_FAIL);
+	}
 	BUFFER_APPEND(buffer, buffer_offset, optrand, optrand_len);
 	BUFFER_APPEND(buffer, buffer_offset, message, message_len);
 
@@ -89,11 +93,11 @@ uint8_t spx_mtl_node_set_prf_msg_sha2(uint8_t * skprf, uint32_t skprf_len,
 		 rmtl, &rmtl_len) == NULL) {
 		LOG_ERROR("HMAC Failure");
 		free(buffer);
-		return 2;
+		return MTL_ERROR;
 	}
 
 	free(buffer);
-	return 0;
+	return MTL_OK;
 }
 
 /*****************************************************************
@@ -111,7 +115,7 @@ uint8_t spx_mtl_node_set_prf_msg_sha2(uint8_t * skprf, uint32_t skprf_len,
  * @param hash_len:    length of the hash for the scheme
  * @return 0 on success, integer on failure
  */
-uint8_t spx_mtl_node_set_prf_msg_shake(uint8_t * skprf, uint32_t skprf_len,
+MTLSTATUS spx_mtl_node_set_prf_msg_shake(uint8_t * skprf, uint32_t skprf_len,
 				       uint8_t * optrand, uint32_t optrand_len,
 				       uint8_t * message, uint32_t message_len,
 				       uint8_t * rmtl, uint32_t hash_len)
@@ -122,14 +126,19 @@ uint8_t spx_mtl_node_set_prf_msg_shake(uint8_t * skprf, uint32_t skprf_len,
 
 	if ((skprf == NULL) || (skprf_len == 0) ||
 	    (optrand == NULL) || (optrand_len == 0) ||
-	    (message == NULL) || (message_len == 0) || (hash_len == 0)) {
+	    (message == NULL) || (message_len == 0) || (rmtl == 0) ||
+		(hash_len == 0)) {
 		LOG_ERROR("Invalid parameters");
-		return 1;
+		return MTL_BAD_PARAM;
 	}
 	// SHA2 PRF_msg from draft-harvey-cfrg-mtl-mode-00 Section 10.1.2
 	// PRF_msg(SK.prf, OptRand, M) = SHAKE256(SK.prf || OptRand || M, 8n)
 	buffer_len = skprf_len + optrand_len + message_len;
 	buffer = calloc(1, buffer_len);
+	if (buffer == NULL) {
+		LOG_ERROR("Failed to allocate msg buffer");
+		return MTL_RESOURCE_FAIL;
+	}
 	BUFFER_APPEND(buffer, buffer_offset, skprf, skprf_len);
 	BUFFER_APPEND(buffer, buffer_offset, optrand, optrand_len);
 	BUFFER_APPEND(buffer, buffer_offset, message, message_len);
@@ -137,7 +146,7 @@ uint8_t spx_mtl_node_set_prf_msg_shake(uint8_t * skprf, uint32_t skprf_len,
 	shake256(rmtl, buffer, buffer_len, hash_len);
 	free(buffer);
 
-	return 0;
+	return MTL_OK;
 
 }
 
@@ -225,7 +234,7 @@ uint8_t mtlns_adrs_full(uint8_t * mtl_adrs, uint32_t type, SERIESID * sid,
  * @param hash_len: Length of byte array
  * @return 0 if successful
  */
-uint8_t spx_sha2(uint8_t * seed, uint32_t seed_len,
+MTLSTATUS spx_sha2(uint8_t * seed, uint32_t seed_len,
 		 uint8_t * adrs, uint32_t adrs_len,
 		 uint8_t * data, uint32_t data_len,
 		 uint8_t * hash, uint32_t hash_len)
@@ -249,6 +258,10 @@ uint8_t spx_sha2(uint8_t * seed, uint32_t seed_len,
 	// Create the buffer that gets hashed   
 	buffer_len = padded_seed_len + adrs_len + data_len;
 	buffer = malloc(buffer_len);
+	if(buffer == NULL) {
+		LOG_ERROR("failed allocating buffer");
+		return MTL_RESOURCE_FAIL;
+	}
 
 	BUFFER_APPEND(buffer, buffer_offset, padded_seed, padded_seed_len);
 	BUFFER_APPEND(buffer, buffer_offset, adrs, adrs_len);
@@ -264,7 +277,7 @@ uint8_t spx_sha2(uint8_t * seed, uint32_t seed_len,
 	}
 
 	free(buffer);
-	return 0;
+	return MTL_OK;
 }
 
 /*****************************************************************
@@ -280,7 +293,7 @@ uint8_t spx_sha2(uint8_t * seed, uint32_t seed_len,
  * @param hash_len: Length of byte array
  * @return 0 if successful
  */
-uint8_t spx_shake(uint8_t * seed, uint32_t seed_len,
+MTLSTATUS spx_shake(uint8_t * seed, uint32_t seed_len,
 		  uint8_t * adrs, uint32_t adrs_len,
 		  uint8_t * data, uint32_t data_len,
 		  uint8_t * hash, uint32_t hash_len)
@@ -292,6 +305,10 @@ uint8_t spx_shake(uint8_t * seed, uint32_t seed_len,
 	// Create the buffer that gets hashed   
 	buffer_len = seed_len + adrs_len + data_len;
 	buffer = malloc(buffer_len);
+	if(buffer == NULL) {
+		LOG_ERROR("failed allocating buffer");
+		return MTL_RESOURCE_FAIL;
+	}
 
 	BUFFER_APPEND(buffer, buffer_offset, seed, seed_len);
 	BUFFER_APPEND(buffer, buffer_offset, adrs, adrs_len);
@@ -300,7 +317,7 @@ uint8_t spx_shake(uint8_t * seed, uint32_t seed_len,
 	shake256(&hash[0], buffer, buffer_len, hash_len);
 
 	free(buffer);
-	return 0;
+	return MTL_OK;
 }
 
 /*****************************************************************
@@ -321,7 +338,7 @@ uint8_t spx_shake(uint8_t * seed, uint32_t seed_len,
  * @param algorithm:  Type of algorithm used (#defined values) 
  * @return 0 if successful
  */
-uint8_t spx_mtl_node_set_hash_message(void *params,
+MTLSTATUS spx_mtl_node_set_hash_message(void *params,
 				      SERIESID * sid,
 				      uint32_t node_id,
 				      uint8_t * rand,
@@ -349,7 +366,7 @@ uint8_t spx_mtl_node_set_hash_message(void *params,
 	    || (msg_buffer == NULL) || (msg_len == 0) || (hash == NULL)
 	    || (hash_len == 0)) {
 		LOG_ERROR("Null parameters");
-		return 1;
+		return MTL_NULL_PTR;
 	}
 	// PRF_msg operation from draft-harvey-cfrg-mtl-mode-03 Section 5.1
 	// sep = octet(MTL_MSG_SEP) || octet(OLEN(ctx)) || ctx 
@@ -375,6 +392,10 @@ uint8_t spx_mtl_node_set_hash_message(void *params,
 	dbuff_len_w_msg = dbuff_len_no_msg + msg_len;
 
 	data_buffer = malloc(dbuff_len_w_msg);
+	if(data_buffer == NULL) {
+		LOG_ERROR("failed allocating data buffer");
+		return MTL_RESOURCE_FAIL;
+	}
 	data_buffer[0] = MTL_MSG_SEP;
 	data_buffer[1] = ctx_len;
 	if(ctx_len > 0) {
@@ -466,11 +487,12 @@ uint8_t spx_mtl_node_set_hash_message(void *params,
 		break;
 	default:
 		LOG_ERROR("Invalid hashing algorithm");
+		return MTL_BAD_PARAM;
 		break;
 	}
 
 	free(data_buffer);
-	return 0;
+	return MTL_OK;
 }
 
 /*****************************************************************
@@ -548,7 +570,7 @@ uint8_t spx_mtl_node_set_hash_message_shake(void *params,
  * @param algorithm:  Type of algorithm used (#defined values) 
  * @return 0 if successful 
  */
-uint8_t spx_mtl_node_set_hash_leaf(void *params,
+MTLSTATUS spx_mtl_node_set_hash_leaf(void *params,
 				   SERIESID * sid,
 				   uint32_t node_id,
 				   uint8_t * msg_buffer,
@@ -567,7 +589,7 @@ uint8_t spx_mtl_node_set_hash_leaf(void *params,
 
 	if ((msg_buffer == NULL) || (hash == NULL) || (hash_len == 0)) {
 		LOG_ERROR("Null parameters");
-		return 1;
+		return MTL_NULL_PTR;
 	}
 
 	switch (algorithm) {
@@ -585,6 +607,7 @@ uint8_t spx_mtl_node_set_hash_leaf(void *params,
 		break;
 	default:
 		LOG_ERROR("Invalid hashing algorithm");
+		return MTL_BAD_PARAM;
 		break;
 	}
 
@@ -592,6 +615,10 @@ uint8_t spx_mtl_node_set_hash_leaf(void *params,
 	// spx.F(seed, dataADRS.bytes(), data_value)
 
 	tmp_buffer = calloc(1, msg_len);
+	if (tmp_buffer == NULL) {
+		LOG_ERROR("Unable to allocate tmp_buffer");
+		return MTL_RESOURCE_FAIL;
+	}
 	// If robust variation hash address for mask and xor with data
 	if (spx_prop->robust) {
 		bitmask = calloc(1, msg_len);
@@ -623,6 +650,7 @@ uint8_t spx_mtl_node_set_hash_leaf(void *params,
 			break;
 		default:
 			LOG_ERROR("Invalid hashing algorithm");
+			return MTL_BAD_PARAM;
 			break;
 		}
 
@@ -657,6 +685,7 @@ uint8_t spx_mtl_node_set_hash_leaf(void *params,
 		break;
 	default:
 		LOG_ERROR("Invalid hashing algorithm");
+		return MTL_BAD_PARAM;
 		break;
 	}
 
@@ -726,7 +755,7 @@ uint8_t spx_mtl_node_set_hash_leaf_shake(void *params,
  * @param algorithm:  Type of algorithm used (#defined values) 
  * @return 0 if successful 
  */
-uint8_t spx_mtl_node_set_hash_int(void *params,
+MTLSTATUS spx_mtl_node_set_hash_int(void *params,
 				  SERIESID * sid,
 				  uint32_t node_left,
 				  uint32_t node_right,
@@ -748,7 +777,7 @@ uint8_t spx_mtl_node_set_hash_int(void *params,
 
 	if (hash == NULL) {
 		LOG_ERROR("Null parameters");
-		return 1;
+		return MTL_NULL_PTR;
 	}
 	// spx.H(seed, mtlnsADRS.bytes(), (left_hash, right_hash))
 	switch (algorithm) {
@@ -773,7 +802,7 @@ uint8_t spx_mtl_node_set_hash_int(void *params,
 	buffer = malloc(buffer_len);
 	if (buffer == NULL) {
 		LOG_ERROR("Unable to allocate buffer");
-		return 1;
+		return MTL_RESOURCE_FAIL;
 	}
 	memcpy(buffer, hash_left, hash_len);
 	memcpy(buffer + hash_len, hash_right, hash_len);

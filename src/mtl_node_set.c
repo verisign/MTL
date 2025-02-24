@@ -109,9 +109,9 @@ void mtl_node_set_free(MTLNODES * nodes)
  * @param left: left index of the node to insert
  * @param right: right index of the node to insert
  * @param hash: hash value to insert
- * @return 0 if successful
+ * @return MTL_OK if successful
  */
-uint8_t mtl_node_set_insert(MTLNODES * nodes, uint32_t left, uint32_t right,
+MTLSTATUS mtl_node_set_insert(MTLNODES * nodes, uint32_t left, uint32_t right,
 			    uint8_t * hash)
 {
 	uint32_t index;
@@ -120,30 +120,38 @@ uint8_t mtl_node_set_insert(MTLNODES * nodes, uint32_t left, uint32_t right,
 
 	if ((nodes == NULL) || (hash == NULL)) {
 		LOG_ERROR("Null parameters provided");
-		return 1;
+		return MTL_BAD_PARAM;
 	}
 
-	index = mtl_node_set_int_node_id(left, right);
+	if (mtl_node_set_int_node_id(left, right, &index) != MTL_OK)
+	{
+		LOG_ERROR("Attempted to insert invalid node");
+		return MTL_BAD_PARAM;
+	}
 	page = (index * nodes->hash_size) / nodes->tree_page_size;
 	offset = (index * nodes->hash_size) % nodes->tree_page_size;
 
 	if (page >= MTL_TREE_MAX_PAGES) {
 		LOG_ERROR("Tree entry out of range");
-		return 1;
+		return MTL_BAD_PARAM;
 	}
 	// Add a new tree page if memory is not already allocated
 	if (nodes->tree_pages[page] == NULL) {
 		nodes->tree_pages[page] = calloc(1, nodes->tree_page_size);
 		if (nodes->tree_pages[page] == NULL) {
 			LOG_ERROR("Unable to allocate memory");
-			return 2;
+			return MTL_RESOURCE_FAIL;
 		}
 	}
 
 	uint8_t *buffer = nodes->tree_pages[page] + offset;
 	memcpy(buffer, hash, nodes->hash_size);
 
-	return 0;
+	// Update leaf count
+	// We assume all nodes lower than current leaf are added atomically
+	nodes-> leaf_count = right+1 > nodes->leaf_count ? right+1 : nodes->leaf_count;
+
+	return MTL_OK;
 }
 
 /*****************************************************************
@@ -152,17 +160,23 @@ uint8_t mtl_node_set_insert(MTLNODES * nodes, uint32_t left, uint32_t right,
  * @param nodes: Pointer to MTL node context to initalize
  * @param leaf_index: The leaf index that utilizes the randomizer
  * @param rand: randomizer value to insert (NULL for none)
- * @return none
+ * @return MTL_OK on success
  */
-uint8_t mtl_node_set_insert_randomizer(MTLNODES * nodes,
+MTLSTATUS mtl_node_set_insert_randomizer(MTLNODES * nodes,
 				       uint32_t leaf_index, uint8_t * rand)
 {
 	uint16_t page;
 	uint64_t offset;
+	uint32_t index;
 
 	if ((nodes == NULL) || (rand == NULL)) {
 		LOG_ERROR("Null parameters provided");
-		return 1;
+		return MTL_BAD_PARAM;
+	}
+	if (mtl_node_set_int_node_id(leaf_index, leaf_index, &index) != MTL_OK)
+	{
+		LOG_ERROR("Attempted to insert invalid node randomizer");
+		return MTL_BAD_PARAM;
 	}
 
 	page = (leaf_index * nodes->hash_size) / nodes->tree_page_size;
@@ -170,7 +184,7 @@ uint8_t mtl_node_set_insert_randomizer(MTLNODES * nodes,
 
 	if (page >= MTL_TREE_RANDOMIZER_PAGES) {
 		LOG_ERROR("Tree entry out of range");
-		return 1;
+		return MTL_BAD_PARAM;
 	}
 
 	if (nodes->randomizer_pages[page] == NULL) {
@@ -178,14 +192,14 @@ uint8_t mtl_node_set_insert_randomizer(MTLNODES * nodes,
 		    calloc(1, nodes->tree_page_size);
 		if (nodes->randomizer_pages[page] == NULL) {
 			LOG_ERROR("Unable to allocate memory");
-			return 2;
+			return MTL_RESOURCE_FAIL;
 		}
 	}
 
 	uint8_t *buffer = nodes->randomizer_pages[page] + offset;
 	memcpy(buffer, rand, nodes->hash_size);
 
-	return 0;
+	return MTL_OK;
 }
 
 /*****************************************************************
@@ -195,17 +209,27 @@ uint8_t mtl_node_set_insert_randomizer(MTLNODES * nodes,
  * @param left: left index of the node to fetch
  * @param right: right index of the node to fetch
  * @param hash: pointer to fill with the hash value (caller must free)
- * @return 0 if successful
+ * @return MTL_OK if successful
  */
-uint8_t mtl_node_set_fetch(MTLNODES * nodes, uint32_t left, uint32_t right,
+MTLSTATUS mtl_node_set_fetch(MTLNODES * nodes, uint32_t left, uint32_t right,
 			   uint8_t ** hash)
 {
 	if ((nodes == NULL) || (hash == NULL)) {
 		LOG_ERROR("Null parameters provided");
-		return 1;
+		return MTL_BAD_PARAM;
 	}
 
-	uint32_t index = mtl_node_set_int_node_id(left, right);
+	uint32_t index;
+	if (mtl_node_set_int_node_id(left, right, &index) != MTL_OK)
+	{
+		LOG_ERROR("Attempted to fetch invalid node");
+		return MTL_BAD_PARAM;
+	}
+	if (right+1 > nodes->leaf_count)
+	{
+		LOG_ERROR("Attempted to fetch node before insert");
+		return MTL_ERROR;
+	}
 	uint16_t page = (index * nodes->hash_size) / nodes->tree_page_size;
 	uint64_t offset = (index * nodes->hash_size) % nodes->tree_page_size;
 
@@ -213,17 +237,17 @@ uint8_t mtl_node_set_fetch(MTLNODES * nodes, uint32_t left, uint32_t right,
 	if ((page >= MTL_TREE_MAX_PAGES) || (nodes->tree_pages[page] == NULL)) {
 		*hash = NULL;
 		LOG_ERROR("Null parameters provided");
-		return 1;
+		return MTL_BAD_PARAM;
 	}
 
 	*hash = malloc(nodes->hash_size);
 	if (*hash == NULL) {
 		LOG_ERROR("Unable to allocate memory");
-		return 2;
+		return MTL_RESOURCE_FAIL;
 	}
 	uint8_t *buffer = nodes->tree_pages[page] + offset;
 	memcpy(*hash, buffer, nodes->hash_size);
-	return 0;
+	return MTL_OK;
 }
 
 /*****************************************************************
@@ -232,17 +256,29 @@ uint8_t mtl_node_set_fetch(MTLNODES * nodes, uint32_t left, uint32_t right,
  * @param nodes: Pointer to the MTLNS structure
  * @param leaf: leaf index of the randomizer to fetch
  * @param rand: pointer to fill with the hash value (caller must free)
- * @return 0 if successful
+ * @return MTL_OK if successful
  */
-uint8_t mtl_node_set_get_randomizer(MTLNODES * nodes, uint32_t leaf,
+MTLSTATUS mtl_node_set_get_randomizer(MTLNODES * nodes, uint32_t leaf,
 				    uint8_t ** rand)
 {
 	uint16_t page;
 	uint64_t offset;
+	uint32_t index;
 
 	if ((nodes == NULL) || (rand == NULL)) {
 		LOG_ERROR("Null parameters provided");
-		return 1;
+		return MTL_BAD_PARAM;
+	}
+	if (mtl_node_set_int_node_id(leaf, leaf, &index) != MTL_OK)
+	{
+		LOG_ERROR("Attempted to get invalid node randomizer");
+		return MTL_BAD_PARAM;
+	}
+	// We assume leaves and their randomizers are set at the same time
+	if (leaf+1 > nodes->leaf_count)
+	{
+		LOG_ERROR("Attempted to fetch randomizer before insert");
+		return MTL_ERROR;
 	}
 
 	*rand = NULL;
@@ -253,14 +289,61 @@ uint8_t mtl_node_set_get_randomizer(MTLNODES * nodes, uint32_t leaf,
 	if ((page >= MTL_TREE_RANDOMIZER_PAGES)
 	    || (nodes->randomizer_pages[page] == NULL)) {
 		LOG_ERROR("Invalid id provided");
-		return 2;
+		return MTL_ERROR;
 	}
 
 	*rand = malloc(nodes->hash_size);
+	if (*rand == NULL) {
+		LOG_ERROR_WITH_CODE("mtl_node_set_get_randomizer",MTL_NULL_PTR);
+	}
 	uint8_t *buffer = nodes->randomizer_pages[page] + offset;
 	memcpy(*rand, buffer, nodes->hash_size);
 
-	return 0;
+	return MTL_OK;
+}
+
+/*****************************************************************
+*  Determine if two leaves bound a complete subtree
+******************************************************************
+ * @param left: left index of the tested subtree
+ * @param right: right index of the tested subtree
+ * @return MTL_OK if the indices are valid, MTL_BAD_PARAM if not
+ */
+MTLSTATUS mtl_node_is_valid_subtree(uint32_t left, uint32_t right)
+{
+	uint32_t prefix_bitmask, postfix_bitmask, i;
+
+	// Subtree must have non-negative size
+	if ( right < left )
+	{
+		return MTL_BAD_PARAM;
+	}
+	// Both indices must be valid leaf indices
+	if ( right > MTL_NODE_SET_MAX_LEAF || left > MTL_NODE_SET_MAX_LEAF )
+	{
+		return MTL_BAD_PARAM;
+	}
+	// Subtree is defined by a common prefix
+	prefix_bitmask = 0xffffffff;
+	for (i = 0; i < 32; i++)
+	{
+		if( (left & prefix_bitmask) == (right & prefix_bitmask) )
+		{
+			break;
+		}
+		// remove bits on the right until the prefixes match
+		prefix_bitmask -= (1 << i);
+	}
+	// Leftmost node of subtree is all 0 after prefix; rightmost is all 1
+	postfix_bitmask = ~prefix_bitmask;
+	if ( (left & postfix_bitmask) != 0 
+		|| (right & postfix_bitmask) != postfix_bitmask )
+	{
+		return MTL_BAD_PARAM;
+	}
+
+	return MTL_OK;
+		
 }
 
 /*****************************************************************
@@ -268,12 +351,28 @@ uint8_t mtl_node_set_get_randomizer(MTLNODES * nodes, uint32_t leaf,
 ******************************************************************
  * @param left: left index of the node to insert
  * @param right: right index of the node to insert
- * @return array index
+ * @param return_index: output address for index of left and right LCA
+ * @return MTL_OK if successful, and *return_index set
+ * 			MTL_ERROR if <left,right> is not a valid node
  */
-uint32_t mtl_node_set_int_node_id(uint32_t left, uint32_t right)
+MTLSTATUS mtl_node_set_int_node_id(uint32_t left, uint32_t right, uint32_t * return_index)
 {
-	return 2 * (right + 1) - mtl_bit_width(right + 1) - mtl_lsb(right + 1) +
-	    mtl_msb(right - left + 1) - 1;;
+	if ( return_index == NULL ) 
+	{
+		LOG_ERROR("Input null pointer to interior node calculation");
+		return MTL_NULL_PTR;
+	}
+	// int_node_id function is only defined over valid subtrees
+	if ( mtl_node_is_valid_subtree(left, right) != MTL_OK )
+	{
+		LOG_ERROR("Tried to access invalid subtree");
+		return MTL_BAD_PARAM;
+	}
+	else {
+		*return_index =  2 * (right + 1) - mtl_bit_width(right + 1) 
+			- mtl_lsb(right + 1) + mtl_msb(right - left + 1) - 1;
+	}
+	return MTL_OK;
 }
 
 /*****************************************************************

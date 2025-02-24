@@ -95,22 +95,22 @@ uint8_t mtltest_mtl_generate_randomizer(void)
 
 	// Check that the seed is used for the randomizer
 	mtl_ctx->randomize = 0;
-	assert(mtl_generate_randomizer(mtl_ctx, &randomizer) == 0);
+	assert(mtl_generate_randomizer(mtl_ctx, &randomizer) == MTL_OK);
 	assert(randomizer->length == pk_seed.length);
-	assert(memcmp(randomizer->value, pk_seed.seed, pk_seed.length) == 0);
+	assert(memcmp(randomizer->value, pk_seed.seed, pk_seed.length) ==0);
 	assert(mtl_randomizer_free(randomizer) == MTL_OK);
 
 	// Check that randomizer is not the seed when configured
 	mtl_ctx->randomize = 1;
-	assert(mtl_generate_randomizer(mtl_ctx, &randomizer) == 0);
+	assert(mtl_generate_randomizer(mtl_ctx, &randomizer) == MTL_OK);
 	assert(randomizer->length == pk_seed.length);
 	assert(memcmp(randomizer->value, pk_seed.seed, pk_seed.length) != 0);
 	assert(mtl_randomizer_free(randomizer) == MTL_OK);
 
 	// Check NULL parameters
 	mtl_ctx->randomize = 0;
-	assert(mtl_generate_randomizer(NULL, &randomizer) == 1);
-	assert(mtl_generate_randomizer(mtl_ctx, NULL) == 1);
+	assert(mtl_generate_randomizer(NULL, &randomizer) == MTL_NULL_PTR);
+	assert(mtl_generate_randomizer(mtl_ctx, NULL) == MTL_NULL_PTR);
 
 	assert(mtl_free(mtl_ctx) == MTL_OK);
 
@@ -187,7 +187,7 @@ uint8_t mtltest_mtl_hash_and_append(void)
 	SERIESID sid;
 	MTL_CTX *mtl_ctx = NULL;
 	char message_buffer[32];
-	uint16_t index;
+	uint32_t index, added_index;
 	static const SPX_PARAMS params;
 
 	memset(&sid, 0, sizeof(SERIESID));
@@ -205,10 +205,13 @@ uint8_t mtltest_mtl_hash_and_append(void)
 
 	// Verify inserting records
 	for (index = 0; index < 16; index++) {
+		assert(mtl_ctx->nodes.leaf_count == index);
 		sprintf(message_buffer, "Verification Msg %d\n", index);
 		assert(mtl_hash_and_append
 		       (mtl_ctx, (unsigned char *)message_buffer,
-			strlen(message_buffer)) == index);
+			strlen(message_buffer), &added_index) == MTL_OK);
+			assert(added_index == index);
+		assert(mtl_ctx->nodes.leaf_count == index+1);
 	}
 
 	assert(mtl_ctx->nodes.leaf_count == 16);
@@ -219,11 +222,12 @@ uint8_t mtltest_mtl_hash_and_append(void)
 	// Verify NULL parameters
 	assert(mtl_hash_and_append
 	       (NULL, (unsigned char *)message_buffer,
-		strlen(message_buffer)) == 0xffffffff);
-	assert(mtl_hash_and_append(mtl_ctx, NULL, strlen(message_buffer)) ==
-	       0xffffffff);
-	assert(mtl_hash_and_append(mtl_ctx, (unsigned char *)message_buffer, 0)
-	       == 0xffffffff);
+		strlen(message_buffer), &added_index) == MTL_NULL_PTR);
+	assert(mtl_hash_and_append(mtl_ctx, NULL, strlen(message_buffer), &added_index) ==
+	       MTL_NULL_PTR);
+	assert(mtl_hash_and_append(mtl_ctx, (unsigned char *)message_buffer, 0, &added_index)
+	       == MTL_NULL_PTR);
+	assert(mtl_hash_and_append(mtl_ctx, (unsigned char *)message_buffer, strlen(message_buffer), NULL ) == MTL_NULL_PTR);
 
 	assert(mtl_free(mtl_ctx) == MTL_OK);
 
@@ -239,7 +243,7 @@ uint8_t mtltest_mtl_hash_and_append_random(void)
 	SERIESID sid;
 	MTL_CTX *mtl_ctx = NULL;
 	char message_buffer[32];
-	uint16_t index;
+	uint32_t index, added_index;
 	static const SPX_PARAMS params;
 
 	memset(&sid, 0, sizeof(SERIESID));
@@ -257,10 +261,13 @@ uint8_t mtltest_mtl_hash_and_append_random(void)
 
 	// Verify inserting records
 	for (index = 0; index < 16; index++) {
+		assert(mtl_ctx->nodes.leaf_count == index);
 		sprintf(message_buffer, "Verification Msg %d\n", index);
 		assert(mtl_hash_and_append
 		       (mtl_ctx, (unsigned char *)message_buffer,
-			strlen(message_buffer)) == index);
+			strlen(message_buffer), &added_index) == MTL_OK);
+		assert(added_index == index);
+		assert(mtl_ctx->nodes.leaf_count == index+1);
 	}
 
 	assert(mtl_ctx->nodes.leaf_count == 16);
@@ -271,11 +278,13 @@ uint8_t mtltest_mtl_hash_and_append_random(void)
 	// Verify NULL parameters
 	assert(mtl_hash_and_append
 	       (NULL, (unsigned char *)message_buffer,
-		strlen(message_buffer)) == 0xffffffff);
-	assert(mtl_hash_and_append(mtl_ctx, NULL, strlen(message_buffer)) ==
-	       0xffffffff);
-	assert(mtl_hash_and_append(mtl_ctx, (unsigned char *)message_buffer, 0)
-	       == 0xffffffff);
+		strlen(message_buffer), &added_index) == MTL_NULL_PTR);
+	assert(mtl_hash_and_append(mtl_ctx, NULL, strlen(message_buffer), &added_index) ==
+	       MTL_NULL_PTR);
+	assert(mtl_hash_and_append(mtl_ctx, (unsigned char *)message_buffer, 0, &added_index)
+	       == MTL_NULL_PTR);
+	assert(mtl_hash_and_append(mtl_ctx, (unsigned char *)message_buffer, strlen(message_buffer), NULL ) == MTL_NULL_PTR);
+
 
 	assert(mtl_free(mtl_ctx) == MTL_OK);
 
@@ -291,7 +300,7 @@ uint8_t mtltest_mtl_randomizer_and_authpath(void)
 	SERIESID sid;
 	MTL_CTX *mtl_ctx = NULL;
 	char message_buffer[32];
-	uint16_t index;
+	uint32_t index, added_index;
 	static const SPX_PARAMS params;
 	RANDOMIZER *mtl_rand;
 	AUTHPATH *auth;
@@ -314,13 +323,13 @@ uint8_t mtltest_mtl_randomizer_and_authpath(void)
 		sprintf(message_buffer, "Verification Msg %d\n", index);
 		assert(mtl_hash_and_append
 		       (mtl_ctx, (unsigned char *)message_buffer,
-			strlen(message_buffer)) == index);
+			strlen(message_buffer), &added_index) == MTL_OK);
 	}
 
 	// Verify that authpaths and randomizers are avaialble
 	for (index = 0; index < 16; index++) {
 		assert(mtl_randomizer_and_authpath
-		       (mtl_ctx, index, &mtl_rand, &auth) == 0);
+		       (mtl_ctx, index, &mtl_rand, &auth) == MTL_OK);
 
 		assert(mtl_rand->length == 32);
 		assert(memcmp(mtl_rand->value, pk_seed.seed, pk_seed.length) ==
@@ -339,10 +348,9 @@ uint8_t mtltest_mtl_randomizer_and_authpath(void)
 	}
 
 	// Test NULL parameters
-	assert(mtl_randomizer_and_authpath(NULL, index, &mtl_rand, &auth) != 0);
-	assert(mtl_randomizer_and_authpath(mtl_ctx, index, NULL, &auth) != 0);
-	assert(mtl_randomizer_and_authpath(mtl_ctx, index, &mtl_rand, NULL) !=
-	       0);
+	assert(mtl_randomizer_and_authpath(NULL, index, &mtl_rand, &auth) == MTL_NULL_PTR);
+	assert(mtl_randomizer_and_authpath(mtl_ctx, index, NULL, &auth) == MTL_NULL_PTR);
+	assert(mtl_randomizer_and_authpath(mtl_ctx, index, &mtl_rand, NULL) == MTL_NULL_PTR);
 
 	assert(mtl_free(mtl_ctx) == MTL_OK);
 
@@ -358,7 +366,7 @@ uint8_t mtltest_mtl_randomizer_and_authpath_random(void)
 	SERIESID sid;
 	MTL_CTX *mtl_ctx = NULL;
 	char message_buffer[32];
-	uint16_t index;
+	uint32_t index, added_index;
 	static const SPX_PARAMS params;
 	RANDOMIZER *mtl_rand;
 	AUTHPATH *auth;
@@ -381,13 +389,13 @@ uint8_t mtltest_mtl_randomizer_and_authpath_random(void)
 		sprintf(message_buffer, "Verification Msg %d\n", index);
 		assert(mtl_hash_and_append
 		       (mtl_ctx, (unsigned char *)message_buffer,
-			strlen(message_buffer)) == index);
+			strlen(message_buffer), &added_index) == MTL_OK);
 	}
 
 	// Verify that authpaths and randomizers are avaialble
 	for (index = 0; index < 16; index++) {
 		assert(mtl_randomizer_and_authpath
-		       (mtl_ctx, index, &mtl_rand, &auth) == 0);
+		       (mtl_ctx, index, &mtl_rand, &auth) == MTL_OK);
 
 		assert(mtl_rand->length == 32);
 		assert(memcmp(mtl_rand->value, pk_seed.seed, pk_seed.length) !=
@@ -406,10 +414,9 @@ uint8_t mtltest_mtl_randomizer_and_authpath_random(void)
 	}
 
 	// Test NULL parameters
-	assert(mtl_randomizer_and_authpath(NULL, index, &mtl_rand, &auth) != 0);
-	assert(mtl_randomizer_and_authpath(mtl_ctx, index, NULL, &auth) != 0);
-	assert(mtl_randomizer_and_authpath(mtl_ctx, index, &mtl_rand, NULL) !=
-	       0);
+	assert(mtl_randomizer_and_authpath(NULL, index, &mtl_rand, &auth) == MTL_NULL_PTR);
+	assert(mtl_randomizer_and_authpath(mtl_ctx, index, NULL, &auth)  == MTL_NULL_PTR);
+	assert(mtl_randomizer_and_authpath(mtl_ctx, index, &mtl_rand, NULL) == MTL_NULL_PTR);
 
 	assert(mtl_free(mtl_ctx) == MTL_OK);
 
@@ -425,7 +432,7 @@ uint8_t mtltest_mtl_hash_and_verify(void)
 	SERIESID sid;
 	MTL_CTX *mtl_ctx = NULL;
 	char message_buffer[32];
-	uint16_t index;
+	uint32_t index, added_index;
 	static const SPX_PARAMS params;
 	RANDOMIZER *mtl_rand;
 	AUTHPATH *auth;
@@ -450,7 +457,8 @@ uint8_t mtltest_mtl_hash_and_verify(void)
 		sprintf(message_buffer, "Verification Msg %d\n", index);
 		assert(mtl_hash_and_append
 		       (mtl_ctx, (unsigned char *)message_buffer,
-			strlen(message_buffer)) == index);
+			strlen(message_buffer), &added_index) == MTL_OK);
+		assert(added_index == index);
 	}
 
 	// Get ladder and rung
@@ -459,13 +467,13 @@ uint8_t mtltest_mtl_hash_and_verify(void)
 	// Verify that authpaths and randomizers are avaialble
 	for (index = 0; index < 16; index++) {
 		assert(mtl_randomizer_and_authpath
-		       (mtl_ctx, index, &mtl_rand, &auth) == 0);
+		       (mtl_ctx, index, &mtl_rand, &auth) == MTL_OK);
 
 		sprintf(message_buffer, "Verification Msg %d\n", index);
 		rung = mtl_rung(auth, ladder);
 		assert(mtl_hash_and_verify
 		       (mtl_ctx, (unsigned char *)message_buffer,
-			strlen(message_buffer), mtl_rand, auth, rung) == 0);
+			strlen(message_buffer), mtl_rand, auth, rung) == MTL_OK);
 
 		assert(mtl_authpath_free(auth) == MTL_OK);
 		assert(mtl_randomizer_free(mtl_rand) == MTL_OK);
@@ -474,21 +482,21 @@ uint8_t mtltest_mtl_hash_and_verify(void)
 	// Verify NULL parameters
 	assert(mtl_hash_and_verify(NULL, (unsigned char *)message_buffer,
 				   strlen(message_buffer), mtl_rand,
-				   auth, rung) != 0);
+				   auth, rung) != MTL_OK);
 	assert(mtl_hash_and_verify(mtl_ctx, NULL,
 				   strlen(message_buffer), mtl_rand,
-				   auth, rung) != 0);
+				   auth, rung) != MTL_OK);
 	assert(mtl_hash_and_verify(mtl_ctx, (unsigned char *)message_buffer,
-				   0, mtl_rand, auth, rung) != 0);
+				   0, mtl_rand, auth, rung) != MTL_OK);
 	assert(mtl_hash_and_verify(mtl_ctx, (unsigned char *)message_buffer,
 				   strlen(message_buffer), NULL,
-				   auth, rung) != 0);
+				   auth, rung) != MTL_OK);
 	assert(mtl_hash_and_verify(mtl_ctx, (unsigned char *)message_buffer,
 				   strlen(message_buffer), mtl_rand,
-				   NULL, rung) != 0);
+				   NULL, rung) != MTL_OK);
 	assert(mtl_hash_and_verify(mtl_ctx, (unsigned char *)message_buffer,
 				   strlen(message_buffer), mtl_rand,
-				   auth, NULL) != 0);
+				   auth, NULL) != MTL_OK);
 
 	assert(mtl_ladder_free(ladder) == MTL_OK);
 	assert(mtl_free(mtl_ctx) == MTL_OK);
@@ -505,7 +513,7 @@ uint8_t mtltest_mtl_hash_and_verify_random(void)
 	SERIESID sid;
 	MTL_CTX *mtl_ctx = NULL;
 	char message_buffer[32];
-	uint16_t index;
+	uint32_t index, added_index;
 	static const SPX_PARAMS params;
 	RANDOMIZER *mtl_rand;
 	AUTHPATH *auth;
@@ -530,7 +538,8 @@ uint8_t mtltest_mtl_hash_and_verify_random(void)
 		sprintf(message_buffer, "Verification Msg %d\n", index);
 		assert(mtl_hash_and_append
 		       (mtl_ctx, (unsigned char *)message_buffer,
-			strlen(message_buffer)) == index);
+			strlen(message_buffer), &added_index) == MTL_OK);
+		assert(added_index == index);
 	}
 
 	// Get ladder and rung
@@ -539,13 +548,13 @@ uint8_t mtltest_mtl_hash_and_verify_random(void)
 	// Verify that authpaths and randomizers are avaialble
 	for (index = 0; index < 16; index++) {
 		assert(mtl_randomizer_and_authpath
-		       (mtl_ctx, index, &mtl_rand, &auth) == 0);
+		       (mtl_ctx, index, &mtl_rand, &auth) == MTL_OK);
 
 		sprintf(message_buffer, "Verification Msg %d\n", index);
 		rung = mtl_rung(auth, ladder);
 		assert(mtl_hash_and_verify
 		       (mtl_ctx, (unsigned char *)message_buffer,
-			strlen(message_buffer), mtl_rand, auth, rung) == 0);
+			strlen(message_buffer), mtl_rand, auth, rung) == MTL_OK);
 
 		assert(mtl_authpath_free(auth) == MTL_OK);
 		assert(mtl_randomizer_free(mtl_rand) == MTL_OK);
@@ -554,21 +563,21 @@ uint8_t mtltest_mtl_hash_and_verify_random(void)
 	// Verify NULL parameters
 	assert(mtl_hash_and_verify(NULL, (unsigned char *)message_buffer,
 				   strlen(message_buffer), mtl_rand,
-				   auth, rung) != 0);
+				   auth, rung) == MTL_NULL_PTR);
 	assert(mtl_hash_and_verify(mtl_ctx, NULL,
 				   strlen(message_buffer), mtl_rand,
-				   auth, rung) != 0);
+				   auth, rung) == MTL_NULL_PTR);
 	assert(mtl_hash_and_verify(mtl_ctx, (unsigned char *)message_buffer,
-				   0, mtl_rand, auth, rung) != 0);
+				   0, mtl_rand, auth, rung) == MTL_NULL_PTR);
 	assert(mtl_hash_and_verify(mtl_ctx, (unsigned char *)message_buffer,
 				   strlen(message_buffer), NULL,
-				   auth, rung) != 0);
+				   auth, rung) == MTL_NULL_PTR);
 	assert(mtl_hash_and_verify(mtl_ctx, (unsigned char *)message_buffer,
 				   strlen(message_buffer), mtl_rand,
-				   NULL, rung) != 0);
+				   NULL, rung) == MTL_NULL_PTR);
 	assert(mtl_hash_and_verify(mtl_ctx, (unsigned char *)message_buffer,
 				   strlen(message_buffer), mtl_rand,
-				   auth, NULL) != 0);
+				   auth, NULL) == MTL_NULL_PTR);
 
 	assert(mtl_ladder_free(ladder) == MTL_OK);
 	assert(mtl_free(mtl_ctx) == MTL_OK);

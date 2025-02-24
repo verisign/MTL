@@ -94,7 +94,16 @@ MTLSTATUS mtl_set_scheme_functions(MTL_CTX * ctx, void *parameters,
 	ctx->ctx_str = NULL;
 	if(mtl_ctx != NULL) {
 		ctx_str_len = strlen(mtl_ctx);
+		if (ctx_str_len > 255) // draft-harvey-cfrg-mtl-mode-00 §4.1: ctx is at most 255 octets long
+		{
+			LOG_ERROR("Context string must be no longer than 255 bytes");
+			return MTL_RESOURCE_FAIL;
+		}
 		ctx->ctx_str = calloc(1, ctx_str_len+1);
+		if (ctx->ctx_str == NULL)
+		{
+			return MTL_RESOURCE_FAIL;
+		}
 		strncpy(ctx->ctx_str, mtl_ctx,ctx_str_len);
 	}
 
@@ -154,9 +163,9 @@ MTLSTATUS mtl_initns(MTL_CTX ** mtl_ctx, SEED *seed, SERIESID * sid, char* ctx_s
  * @param data_value: byte array of data_value data
  * @param data_value_len: length of the data_value byte array
  * @param leaf_index: index of the leaf node that is being appended
- * @return 0 on success or error num on failureß
+ * @return MTL_OK on success
  */
-uint8_t mtl_append(MTL_CTX * ctx,
+MTLSTATUS mtl_append(MTL_CTX * ctx,
 		   uint8_t * data_value,
 		   uint16_t data_value_len, uint32_t leaf_index)
 {
@@ -166,28 +175,31 @@ uint8_t mtl_append(MTL_CTX * ctx,
 	uint32_t index;
 	uint8_t *hash_left;
 	uint8_t *hash_right;
+	MTLSTATUS return_code;
 
 	if ((ctx == NULL) || (data_value == NULL) || data_value_len == 0) {
 		LOG_ERROR("NULL Input Pointers");
-		return 1;
+		return MTL_NULL_PTR;
 	}
+
 	// Compute and store the leaf node hash value 
 	if (ctx->hash_leaf != NULL) {
 		if (ctx->hash_leaf(ctx->sig_params, &ctx->sid, leaf_index,
 				   data_value, data_value_len, &hash[0],
-				   ctx->nodes.hash_size) != 0) {
+				   ctx->nodes.hash_size) != MTL_OK) {
 			LOG_ERROR("Unable to hash leaf node");
-			return 2;
+			return MTL_ERROR;
 		}
 	} else {
 		LOG_ERROR("Leaf hash function is not defined");
+		return MTL_ERROR;
 	}
 
 	// Add the node to the node set tree
 	if (mtl_node_set_insert(&ctx->nodes, leaf_index, leaf_index, &hash[0])
-	    != 0) {
+	    != MTL_OK) {
 		LOG_ERROR("Unable to add message to node set");
-		return 3;
+		return MTL_ERROR;
 	}
 	// Complete the parent hashes in the tree
 	for (index = 1; index <= mtl_lsb(leaf_index + 1); index++) {
@@ -195,35 +207,41 @@ uint8_t mtl_append(MTL_CTX * ctx,
 		mid_index = leaf_index - (1 << (index - 1)) + 1;
 
 		if ((mtl_node_set_fetch
-		     (&ctx->nodes, left_index, mid_index - 1, &hash_left) == 0)
+		     (&ctx->nodes, left_index, mid_index - 1, &hash_left) == MTL_OK)
 		    &&
 		    (mtl_node_set_fetch
-		     (&ctx->nodes, mid_index, leaf_index, &hash_right) == 0)) {
+		     (&ctx->nodes, mid_index, leaf_index, &hash_right) == MTL_OK)) {
 			if (ctx->hash_node != NULL) {
 				if (ctx->hash_node(ctx->sig_params, &ctx->sid,
 						   left_index, leaf_index,
 						   hash_left, hash_right,
 						   &hash[0],
-						   ctx->nodes.hash_size) != 0) {
+						   ctx->nodes.hash_size) != MTL_OK) {
 					free(hash_left);
 					free(hash_right);
 					LOG_ERROR("Unable to hash the node");
-					return 4;
+					return MTL_ERROR;
 				}
 			} else {
 				LOG_ERROR
 				    ("Internal node hash function is not defined");
+				return MTL_ERROR;
 			}
-			mtl_node_set_insert(&ctx->nodes, left_index, leaf_index,
+			return_code = mtl_node_set_insert(&ctx->nodes, left_index, leaf_index,
 					    &hash[0]);
+			if(return_code != MTL_OK) {
+				LOG_ERROR_WITH_CODE("mtl_node_set_insert", return_code);
+				return MTL_ERROR;
+			}
 			free(hash_left);
 			free(hash_right);
 		} else {
 			LOG_ERROR
 			    ("Unable to fetch hash when appending data_value");
+				return MTL_ERROR;
 		}
 	}
-	return 0;
+	return MTL_OK;
 }
 
 /*****************************************************************
@@ -233,7 +251,7 @@ uint8_t mtl_append(MTL_CTX * ctx,
  * @param ctx,  the context for this MTL Node Set 
  * @param leaf_index: leaf node index of the data value to authenticate
  * @return auth_path: authentication path from the leaf node to the
- *                    associated rung 
+ *                    associated rung, NULL on error
  */
 AUTHPATH *mtl_authpath(MTL_CTX * ctx, uint32_t leaf_index)
 {
@@ -244,6 +262,11 @@ AUTHPATH *mtl_authpath(MTL_CTX * ctx, uint32_t leaf_index)
 	uint32_t pathr = 0;
 	uint8_t *hash;
 	AUTHPATH *auth_path = calloc(1, sizeof(AUTHPATH));
+
+	if(auth_path == NULL) {
+		LOG_ERROR("Unable to allocate auth_path");
+		return NULL;
+	}
 
 	// Check that the leaf is part of this node set
 	if (leaf_index >= ctx->nodes.leaf_count) {
@@ -302,7 +325,7 @@ AUTHPATH *mtl_authpath(MTL_CTX * ctx, uint32_t leaf_index)
  * mtl_ladder from draft-harvey-cfrg-mtl-mode-00 Section 8.6
  ****************************************************************** 
  * @param ctx,  the context for this MTL Node Set 
- * @return ladder, Merkle tree ladder for this node set
+ * @return ladder, Merkle tree ladder for this node set, NULL on error
  */
 LADDER *mtl_ladder(MTL_CTX * ctx)
 {
@@ -350,7 +373,7 @@ LADDER *mtl_ladder(MTL_CTX * ctx)
  * @param auth_path, authentication path that needs to be covered
  * @param ladder, Merkle tree ladder to authenticate relative to
  * @return assoc_rung, the rung in the ladder associated with the
- *     authentication path or None
+ *     authentication path, NULL on error
  */
 RUNG *mtl_rung(AUTHPATH * auth_path, LADDER * ladder)
 {
@@ -427,14 +450,13 @@ RUNG *mtl_rung(AUTHPATH * auth_path, LADDER * ladder)
  * @param auth_path, (presumed) authentication path from corresponding
  *     leaf node to rung of ladder covering leaf node
  * @param assoc_rung, Merkle tree rung to authenticate relative to
- * @return result, a Boolean indicating whether the data value is 
- *     successfully authenticated
+ * @return MTL_OK if path verifies correctly
  */
-uint8_t mtl_verify(MTL_CTX * ctx, uint8_t * data_value,
+MTLSTATUS mtl_verify(MTL_CTX * ctx, uint8_t * data_value,
 		   uint16_t data_value_len, AUTHPATH * auth_path,
 		   RUNG * assoc_rung)
 {
-	uint16_t result;
+	MTLSTATUS result;
 	uint8_t target_hash[EVP_MAX_MD_SIZE];
 	uint32_t leaf_index = 0;
 	uint32_t sibling_hash_count = 0;
@@ -447,7 +469,7 @@ uint8_t mtl_verify(MTL_CTX * ctx, uint8_t * data_value,
 	if ((ctx == NULL) || (data_value == NULL) || (data_value_len == 0)
 	    || (auth_path == NULL)
 	    || (assoc_rung == NULL)) {
-		return 1;
+		return MTL_NULL_PTR;
 	}
 	leaf_index = auth_path->leaf_index;
 	sibling_hash_count = auth_path->sibling_hash_count;
@@ -460,10 +482,12 @@ uint8_t mtl_verify(MTL_CTX * ctx, uint8_t * data_value,
 				   &target_hash[0], assoc_rung->hash_length);
 	} else {
 		LOG_ERROR("Leaf hash function is not defined");
+		return MTL_ERROR;
 	}
 
-	if (result != 0) {
+	if (result != MTL_OK) {
 		LOG_ERROR("Unable to hash leaf node");
+		return MTL_ERROR;
 	}
 	// Compare leaf node hash value to associated rung hash value if
 	//     index pairs match
@@ -493,6 +517,7 @@ uint8_t mtl_verify(MTL_CTX * ctx, uint8_t * data_value,
 			} else {
 				LOG_ERROR
 				    ("Internal node hash function is not defined");
+					return MTL_ERROR;
 			}
 		} else {
 			if (ctx->hash_node != NULL) {
@@ -505,18 +530,26 @@ uint8_t mtl_verify(MTL_CTX * ctx, uint8_t * data_value,
 			} else {
 				LOG_ERROR
 				    ("Internal node hash function is not defined");
+					return MTL_ERROR;
 			}
 		}
 
 		// Break if associated rung reached
 		if ((left_index == assoc_rung->left_index) &&
 		    (right_index == assoc_rung->right_index)) {
-			return memcmp(target_hash, assoc_rung->hash,
-				      assoc_rung->hash_length);
+			if( memcmp(target_hash, assoc_rung->hash,
+				      assoc_rung->hash_length) == 0 ) {
+						return MTL_OK;
+					  }
+					  else {
+						LOG_ERROR("Computed and stored rungs mismatch");
+						return MTL_BOGUS;
+					  }
 		}
 	}
 
-	return 1;
+	LOG_ERROR("Associated rung not on index's path")
+	return MTL_BOGUS;
 }
 
 /************************************************************************

@@ -30,41 +30,13 @@
 	ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 	POSSIBILITY OF SUCH DAMAGE.
 */
-#ifndef __MTL_TOOL_H__
-#define __MTL_TOOL_H__
+#ifndef __MTL_KEYGEN_TOOL_H__
+#define __MTL_KEYGEN_TOOL_H__
 
-#include "mtl.h"
+/* Type definitions */
 
-#define ALG_NONE 0
-#define SPX_ALG_SHAKE 1
-#define SPX_ALG_SHA2  2
+/* Helper macros */
 
-#define SIMPLE 0
-#define ROBUST 1
+/* Function prototypes */
 
-typedef struct ALGORITHM {
-	char *name;
-	uint16_t sec_param;
-	uint16_t nist_level;
-	uint8_t randomize;
-	uint8_t robust;
-	char opt;
-	uint8_t algo;
-	char *oqs_str;
-	uint8_t oid_len;
-	uint8_t oid[16];
-} ALGORITHM;
-
-typedef struct QUEUE_NODE {
-	uint32_t index;
-	struct QUEUE_NODE *next;
-} QUEUE_NODE;
-
-// Function Prototypes
-uint8_t sign_records(FILE * input, FILE * output, MTL_CTX * ctx,
-		     char *oqs_str, uint8_t * sk, uint8_t* oid, size_t oid_len);
-uint8_t verify_records(FILE * input, int signfd, MTL_CTX * ctx,
-		       char *oqs_str, uint8_t * pk, uint8_t* oid, size_t oid_len);
-uint8_t new_key(char *keystr, char *keyfilename, char* ctx_str);
-
-#endif
+#endif //__MTL_KEYGEN_TOOL_H__

@@ -183,7 +183,7 @@ typedef struct SPX_PARAMS {
  * @param hash_len    length of the hash for the scheme
  * @return 0 on success, integer on failure
  */
-uint8_t spx_mtl_node_set_prf_msg_sha2(uint8_t * skprf, uint32_t skprf_len,
+MTLSTATUS spx_mtl_node_set_prf_msg_sha2(uint8_t * skprf, uint32_t skprf_len,
 				      uint8_t * optrand, uint32_t optrand_len,
 				      uint8_t * message, uint32_t message_len,
 				      uint8_t * rmtl, uint32_t hash_len);
@@ -201,7 +201,7 @@ uint8_t spx_mtl_node_set_prf_msg_sha2(uint8_t * skprf, uint32_t skprf_len,
  * @param hash_len    length of the hash for the scheme
  * @return 0 on success, integer on failure
  */					  
-uint8_t spx_mtl_node_set_prf_msg_shake(uint8_t * skprf, uint32_t skprf_len,
+MTLSTATUS spx_mtl_node_set_prf_msg_shake(uint8_t * skprf, uint32_t skprf_len,
 				       uint8_t * optrand, uint32_t optrand_len,
 				       uint8_t * message, uint32_t message_len,
 				       uint8_t * rmtl, uint32_t hash_len);
@@ -292,7 +292,7 @@ uint8_t spx_mtl_node_set_hash_message_shake(void *parameters,
  * @param algorithm  Type of algorithm used (#defined values) 
  * @return 0 if successful
  */						
-uint8_t spx_mtl_node_set_hash_message(void *parameters,
+MTLSTATUS spx_mtl_node_set_hash_message(void *parameters,
 				      SERIESID * sid,
 				      uint32_t node_id,
 				      uint8_t * randomizer,
@@ -315,7 +315,7 @@ uint8_t spx_mtl_node_set_hash_message(void *parameters,
  * @param algorithm  Type of algorithm used (#defined values) 
  * @return 0 if successful 
  */
-uint8_t spx_mtl_node_set_hash_int(void *parameters,
+MTLSTATUS spx_mtl_node_set_hash_int(void *parameters,
 				  SERIESID * sid,
 				  uint32_t node_left,
 				  uint32_t node_right,
@@ -335,7 +335,7 @@ uint8_t spx_mtl_node_set_hash_int(void *parameters,
  * @param algorithm  Type of algorithm used (#defined values) 
  * @return 0 if successful 
  */				  
-uint8_t spx_mtl_node_set_hash_leaf(void *parameters, SERIESID * sid,
+MTLSTATUS spx_mtl_node_set_hash_leaf(void *parameters, SERIESID * sid,
 				   uint32_t node_id, uint8_t * msg_buffer,
 				   uint32_t msg_buffer_len, uint8_t * hash,
 				   uint32_t hash_len, uint8_t algorithm);
@@ -424,7 +424,7 @@ uint8_t spx_mtl_node_set_hash_int_shake(void *parameters, SERIESID * sid,
  * @param hash_len Length of byte array
  * @return 0 if successful
  */
-uint8_t spx_sha2(uint8_t * seed, uint32_t seed_len,
+MTLSTATUS spx_sha2(uint8_t * seed, uint32_t seed_len,
 		 uint8_t * adrs, uint32_t adrs_len,
 		 uint8_t * data, uint32_t data_len,
 		 uint8_t * hash, uint32_t hash_len);
@@ -440,7 +440,7 @@ uint8_t spx_sha2(uint8_t * seed, uint32_t seed_len,
  * @param hash_len Length of byte array
  * @return 0 if successful
  */		 
-uint8_t spx_shake(uint8_t * seed, uint32_t seed_len,
+MTLSTATUS spx_shake(uint8_t * seed, uint32_t seed_len,
 		  uint8_t * adrs, uint32_t adrs_len,
 		  uint8_t * data, uint32_t data_len,
 		  uint8_t * hash, uint32_t hash_len);

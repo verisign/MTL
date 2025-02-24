@@ -33,33 +33,16 @@
 #ifndef __MTL_VERIFY_TOOL_H__
 #define __MTL_VERIFY_TOOL_H__
 
-/* Helper definitions */
-
-#define PKSEED_INIT(ptr, value, len)  {ptr.length=len; memcpy(ptr.seed, value, len);}
-#define PKROOT_INIT(ptr, value, len)  {ptr.length=len; memcpy(ptr.key, value, len);}
-#define SKPRF_INIT(ptr, value, len)   {ptr.length=len; memcpy(ptr.data, value, len);}
-#define SKPRF_CLEAR(ptr, len)         {ptr.length=len; memset(ptr.data, 0, len);}
-
-#define LOG_MESSAGE(msg, buffer) if(buffer!=NULL) {fprintf(buffer,"%s\n", msg);}
+#include <stdbool.h>
+#include "mtl_example_util.h"
 
 /* Type definitions */
-
-typedef enum {
-	HEX_STRING,
-	BASE64_STRING,
-} data_encoding;
-
-typedef enum {
-	FALSE = 0,
-	TRUE = 1,
-} bool_param;
-
 
 /* Function Prototypes*/
 
 /*****************************************************************
-* Parse a ladder from a buffer and verify it if possible
-******************************************************************
+ * Parse a ladder from a buffer and verify it if possible
+ ******************************************************************
  * @param ctx            An initialized MTL context
  * @param algo           Alogorithm for verifying ladder signature
  * @param buffer         Byte buffer containing the ladder
@@ -69,17 +52,17 @@ typedef enum {
  * @param verbose_buffer File pointer (or null) for the verbose output
  * @param encoding       Output format desired (e.g. Base64 encoded?)
  * @param signed_ladder  Flag to print the long signature or not
- * @return 0 on success, 1 on ladder w/o validation, or int for error
+ * @param quiet_mode     Flag to only print error messages
+ * @return MTLSTATUS indicating MLT_OK or error value
  */
-uint8_t parse_ladder(MTL_CTX * ctx, ALGORITHM* algo, uint8_t* buffer,
-                     size_t buffer_len, LADDER** curr_ladder, uint8_t* pk,
-					 FILE* verbose_buffer, data_encoding encoding,
-					 uint8_t signed_ladder);
-
+MTLSTATUS parse_ladder(MTL_CTX *ctx, ALGORITHM *algo, uint8_t *buffer,
+					 size_t buffer_len, LADDER **curr_ladder, uint8_t *pk,
+					 FILE *verbose_buffer, data_encoding encoding,
+					 uint8_t signed_ladder, bool quiet_mode);
 
 /*****************************************************************
-* Verify the authentication path given a good ladder
-******************************************************************
+ * Verify the authentication path given a good ladder
+ ******************************************************************
  * @param ctx            An initialized MTL context
  * @param auth_path      Authentication path to verify
  * @param ladder         Ladder to use to verify the auth_path
@@ -89,24 +72,21 @@ uint8_t parse_ladder(MTL_CTX * ctx, ALGORITHM* algo, uint8_t* buffer,
  * @param verbose_buffer File pointer (or null) for the verbose output
  * @return 0 on success or int value for error
  */
-uint8_t verify_auth_path(MTL_CTX * ctx, AUTHPATH *auth_path, LADDER* ladder,
+MTLSTATUS verify_auth_path(MTL_CTX * ctx, AUTHPATH *auth_path, LADDER* ladder,
                          uint8_t* msg, size_t msg_len, RANDOMIZER *mtl_rand,
 						 FILE* verbose_buffer);
 
 
 /*****************************************************************
-* Setup a public key
-******************************************************************
+ * Setup a public key
+ ******************************************************************
  * @param algo           MTL alogorithm identifier used
  * @param pkey           Public key used to sign the ladder
- * @param sid            MTL Series Identifier used 
- * @param ctx_str        Optional signature context string 
+ * @param sid            MTL Series Identifier used
+ * @param ctx_str        Optional signature context string
  * @return MTL context for verification of MTL signatures
  */
-MTL_CTX* setup_public_key(ALGORITHM* algo, uint8_t* pkey,
-                                 SERIESID* sid, char* ctx_str);
-
-
-
+MTL_CTX *setup_public_key(ALGORITHM *algo, uint8_t *pkey,
+						  SERIESID *sid, char *ctx_str);
 
 #endif //__MTL_VERIFY_TOOL_H__

@@ -35,6 +35,9 @@
 *.i*86
 *.x86_64
 *.hex
+examples/mtlkeygen
+examples/mtlsign
+examples/mtlverify
 
 # Debug files
 *.dSYM/

@@ -34,7 +34,6 @@
 #include <stdint.h>
 #include <sys/stat.h>
 
-#include "mtltool.h"
 #include "mtl_error.h"
 #include "mtl.h"
 #include "mtl_spx.h"
@@ -160,16 +159,17 @@ uint8_t read_key_file(char *keyfilename, uint8_t ** sk, uint32_t * sk_len,
 {
 	uint32_t tree_pages = 0;
 	uint32_t randomizer_pages = 0;
-	uint32_t index=0;
-	uint32_t length=0;
-	uint32_t leaf_count=0;
-	int32_t hash_size=0;
+	uint32_t index = 0;
+	uint32_t length = 0;
+	uint32_t leaf_count = 0;
+	int32_t hash_size = 0;
 	SEED seed;
 	SERIESID sid;
 	MTL_CTX *mtl;
 	FILE *keyfile = NULL;
-	uint8_t ctx_str_len = 0;
+	uint16_t ctx_str_len = 0;
 	char* ctx_str;
+	MTLSTATUS return_code;
 
 	if ((keyfile = fopen(keyfilename, "rb")) == NULL) {
 		LOG_ERROR("Unable to open the keyfile");
@@ -180,28 +180,69 @@ uint8_t read_key_file(char *keyfilename, uint8_t ** sk, uint32_t * sk_len,
 	if(fread(&length, 4, 1, keyfile) != 1) {
 		return 2;
 	}
+	if(length > MTL_MAX_BUFFER_SIZE) {
+		return 2;
+	}
 	*keystr = calloc(1, length + 1);
+	if(*keystr == NULL) {
+		fclose(keyfile);
+		return 2;
+	}
 	if(fread(*keystr, length, 1, keyfile) != 1) {
+		free(*keystr);
+		*keystr = NULL;
 		return 2;
 	}
 
 	// Secret Key & Length - Note not encrypted (for demo purposes only)
 	if(fread(sk_len, 4, 1, keyfile) != 1) {
+		free(*keystr);
+		*keystr = NULL;		
+		return 2;
+	}
+	if(*sk_len > EVP_MAX_MD_SIZE * 2) {
+		free(*keystr);
+		*keystr = NULL;		
 		return 2;
 	}
 	*sk = calloc(1, *sk_len);
+	if(*sk == NULL) {
+		free(*keystr);
+		*keystr = NULL;		
+		return 2;		
+	}
 	if(fread(*sk, *sk_len, 1, keyfile) != 1) {
+		free(*keystr);
+		*keystr = NULL;		
 		return 2;
 	}
 
 	// Public Key & Length 
 	if(fread(pk_len, 4, 1, keyfile) != 1) {
+		free(*keystr);
+		*keystr = NULL;		
+		free(*sk);
+		*sk = NULL;
+		return 2;
+	}
+	if(*pk_len > EVP_MAX_MD_SIZE) {
+		free(*keystr);
+		*keystr = NULL;		
 		free(*sk);
 		*sk = NULL;
 		return 2;
 	}
 	*pk = calloc(1, *pk_len);
+	if(*pk == NULL) {
+		free(*keystr);
+		*keystr = NULL;		
+		free(*sk);
+		*sk = NULL;
+		return 2;		
+	}
 	if(fread(*pk, *pk_len, 1, keyfile) != 1) {
+		free(*keystr);
+		*keystr = NULL;		
 		free(*sk);
 		*sk = NULL;
 		return 2;
@@ -209,6 +250,8 @@ uint8_t read_key_file(char *keyfilename, uint8_t ** sk, uint32_t * sk_len,
 
 	// If Randomizer is used
 	if(fread(randomize, 2, 1, keyfile) != 1) {
+		free(*keystr);
+		*keystr = NULL;		
 		free(*sk);
 		*sk = NULL;
 		free(*pk);
@@ -218,22 +261,44 @@ uint8_t read_key_file(char *keyfilename, uint8_t ** sk, uint32_t * sk_len,
 
 	// Read the context string if any
 	if(fread(&ctx_str_len, 1, 1, keyfile) != 1) {
+		free(*keystr);
+		*keystr = NULL;		
 		free(*sk);
 		*sk = NULL;
 		free(*pk);
 		*pk = NULL;		
 		return 2;
 	}
+	if(ctx_str_len > 256) {
+		free(*keystr);
+		*keystr = NULL;		
+		free(*sk);
+		*sk = NULL;
+		free(*pk);
+		*pk = NULL;		
+		return 2;		
+	}
 	if(ctx_str_len == 0) {
 		ctx_str = NULL;
 	} else {
 		ctx_str = calloc(1, ctx_str_len);
+		if(ctx_str == NULL) {
+			free(*keystr);
+			*keystr = NULL;		
+			free(*sk);
+			*sk = NULL;
+			free(*pk);
+			*pk = NULL;		
+			return 2;			
+		}
 		fread(ctx_str, ctx_str_len, 1, keyfile);
 	}
 
 	// Setup the MTL Context
 	sid.length = 8;
 	if(fread(&sid.id, sid.length, 1, keyfile) != 1) {
+		free(*keystr);
+		*keystr = NULL;		
 		free(*sk);
 		*sk = NULL;
 		free(*pk);
@@ -242,6 +307,8 @@ uint8_t read_key_file(char *keyfilename, uint8_t ** sk, uint32_t * sk_len,
 	}
 	// Leaf Count
 	if(fread(&leaf_count, 4, 1, keyfile) != 1) {
+		free(*keystr);
+		*keystr = NULL;		
 		free(*sk);
 		*sk = NULL;
 		free(*pk);
@@ -250,6 +317,8 @@ uint8_t read_key_file(char *keyfilename, uint8_t ** sk, uint32_t * sk_len,
 	}
 	// Hash Size
 	if(fread(&hash_size, 2, 1, keyfile) != 1) {
+		free(*keystr);
+		*keystr = NULL;		
 		free(*sk);
 		*sk = NULL;
 		free(*pk);
@@ -257,6 +326,8 @@ uint8_t read_key_file(char *keyfilename, uint8_t ** sk, uint32_t * sk_len,
 		return 2;
 	}
 	if(hash_size < 0 || hash_size > EVP_MAX_MD_SIZE) {
+		free(*keystr);
+		*keystr = NULL;		
 		free(*sk);
 		*sk = NULL;
 		free(*pk);
@@ -265,13 +336,20 @@ uint8_t read_key_file(char *keyfilename, uint8_t ** sk, uint32_t * sk_len,
 	}
 
 	PKSEED_INIT(seed, *pk, hash_size);
-	mtl_initns(&mtl, &seed, &sid, ctx_str);
+	return_code = mtl_initns(&mtl, &seed, &sid, ctx_str);
+	if(return_code != MTL_OK)
+	{
+		LOG_ERROR_WITH_CODE("mtl_initns",return_code);
+		return MTL_ERROR;
+	}
 	free(ctx_str);
 
 	mtl->nodes.leaf_count = leaf_count;
 	mtl->nodes.hash_size = (uint16_t)hash_size;
 	// Tree Page Count
 	if(fread(&tree_pages, 4, 1, keyfile) != 1) {
+		free(*keystr);
+		*keystr = NULL;		
 		free(*sk);
 		*sk = NULL;
 		free(*pk);
@@ -280,6 +358,8 @@ uint8_t read_key_file(char *keyfilename, uint8_t ** sk, uint32_t * sk_len,
 	}
 	// Randomizer Page Count
 	if(fread(&randomizer_pages, 4, 1, keyfile) != 1) {
+		free(*keystr);
+		*keystr = NULL;		
 		free(*sk);
 		*sk = NULL;
 		free(*pk);
@@ -290,8 +370,19 @@ uint8_t read_key_file(char *keyfilename, uint8_t ** sk, uint32_t * sk_len,
 	for (index = 0; index < tree_pages; index++) {
 		mtl->nodes.tree_pages[index] =
 		    malloc(mtl->nodes.tree_page_size);
+		if(mtl->nodes.tree_pages[index] == NULL) {
+			free(*keystr);
+			*keystr = NULL;				
+			free(*sk);
+			*sk = NULL;
+			free(*pk);
+			*pk = NULL;		
+			return 2;			
+		}
 		if(fread(mtl->nodes.tree_pages[index], mtl->nodes.tree_page_size,
 		      1, keyfile) != 1) {
+			free(*keystr);
+			*keystr = NULL;				
 			free(*sk);
 			*sk = NULL;
 			free(*pk);
@@ -303,8 +394,19 @@ uint8_t read_key_file(char *keyfilename, uint8_t ** sk, uint32_t * sk_len,
 	for (index = 0; index < randomizer_pages; index++) {
 		mtl->nodes.randomizer_pages[index] =
 		    malloc(mtl->nodes.tree_page_size);
+		if(mtl->nodes.randomizer_pages[index] == NULL) {
+			free(*keystr);
+			*keystr = NULL;				
+			free(*sk);
+			*sk = NULL;
+			free(*pk);
+			*pk = NULL;		
+			return 2;	
+		}
 		if(fread(mtl->nodes.randomizer_pages[index],
 		      mtl->nodes.tree_page_size, 1, keyfile) != 1) {
+			free(*keystr);
+			*keystr = NULL;				
 			free(*sk);
 			*sk = NULL;
 			free(*pk);
