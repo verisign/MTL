@@ -16,13 +16,113 @@ MTL Reference Library Implementation based on [draft-harvey-cfrg-mtl-mode-00](ht
 Alternatively, `make check` can be run to exercise the mtltest tool.
 
 ## Running the example application
-(After building the library and tools) run the mtltool application `examples/mtltool` with one of the three supported commands
-* `mtltool keygen <key file> <key string>`
-* `mtltool sign   <key file> <data file> <signature file>`
-* `mtltool verify <key file> <data file> <signature file>`
+(After building the library and tools) run the mtl example applications `cd examples; ./test.sh` or use one of the three utities:
+* `mtlkeygen [options] key_file algorithm [context_str]`
+* `mtlsign   mtlsign [options] key_file msg_file_1 msg_file_2 ...`
+* `mtlverify [options] algorithm_str key_file message_str signature_str [ladder_str]`
 
-Where key file is the private/public key pair to generate/use, data file is an ascii file for which each line in the file will be signed, and signature file is a  binary file that will have one signature for each record signed.
-Key string is one of the supported algorithm strings [README_SCHEMES.md](README_SCHEMES.md)
+Running each tool with -h (or no parameters) will give the help output which describes the parameters for that utility.
+Note: Algorithm should be one of the supported algorithm strings [README_SCHEMES.md](README_SCHEMES.md)
+
+### MTLKEYGEN
+```
+Usage: mtlkeygen [options] key_file algorithm [context_str]
+
+    RETURN VALUE
+      0 on success or number for error
+
+    OPTIONS
+      -h    Print this tool usage help message
+
+    PARAMETERS
+      key_file      The key_file name/path where the generated key should be stored
+      algorithm     The algorithms string for type of key to generate
+                    See the list of supported algorithm strings below
+      context_str   An optional context string to use with this key
+
+    EXAMPLE USAGE
+      mtlkeygen ./testkey.key SPHINCS+-MTL-SHA2-128S-SIMPLE
+
+    SUPPORTED ALGORITHMS
+      SPHINCS+-MTL-SHAKE-128S-SIMPLE
+      SPHINCS+-MTL-SHAKE-128F-SIMPLE
+      SPHINCS+-MTL-SHAKE-192S-SIMPLE
+      SPHINCS+-MTL-SHAKE-192F-SIMPLE
+      SPHINCS+-MTL-SHAKE-256S-SIMPLE
+      SPHINCS+-MTL-SHAKE-256F-SIMPLE
+      SPHINCS+-MTL-SHA2-128S-SIMPLE
+      SPHINCS+-MTL-SHA2-128F-SIMPLE
+      SPHINCS+-MTL-SHA2-192S-SIMPLE
+      SPHINCS+-MTL-SHA2-192F-SIMPLE
+      SPHINCS+-MTL-SHA2-256S-SIMPLE
+      SPHINCS+-MTL-SHA2-256F-SIMPLE
+```
+
+### MTLSIGN
+```
+ Usage: mtlsign [options] key_file msg_file_1 msg_file_2 ...
+
+    RETURN VALUE
+      0 on success or number for error
+
+    OPTIONS
+      -b            Message files and signatures use base64 encoding rather than binary data in hex format
+      -h            Print this help message
+      -i= NodeID    Get the latest signature info for a NodeID rather than signing a message
+      -l            Produce full signatures instead of condensed signature
+      -v            Use verbose output
+
+    PARAMETERS
+      key_file      The key_file name/path where the generated key should be read/updated
+      msg_file_x    File that contains the message to sign (in binary or base64 format)
+
+    EXAMPLE USAGE
+      mtlsign -l -i 0 testkey.key message1.bin message2.bin
+```
+
+### MTLVERIFY
+```
+Usage: mtlverify [options] algorithm_str key_file message_str signature_str [ladder_str]
+
+    RETURN VALUE
+      0 on success or number for error
+
+    OPTIONS
+      -b              Message files and signatures use base64 encoding rather than binary data in hex format
+      -h              Print this help message
+      -l= ladder_file File that contains the signed ladder, rather than passing in as a parameter string
+      -q              Do not print non-error messages      -s              Output the ladder signature with the validated ladder
+      -v              Use verbose output
+
+    PARAMETERS
+      algorithm_str The algorithms string for type of key to generate
+                    See the list of supported algorithm strings below
+      key_file      The key_file name/path where the generated key should be read
+      message_str   Hex string that represents the message to verify (or base64 format if used with -b option)
+      signature_str Hex string that represents the signature on the message (or base64 format if used with -b option)
+      ladder_str    Optinal hex string that represents the signed ladder on the message
+
+    EXAMPLE USAGE (line break added for readability)
+      mtlverify -q SPHINCS+-MTL-SHA2-128S-SIMPLE d568a8c5f343b9fac1ab74367430d417db4d31cb0ad26f6d82af66eaae60928f  883814c80c
+                4310b4f0e8 4b8b1e65b9f506be27c61b82dc03add300008b7da2ad29a8de3c000000000000000000000007000396354149b979b8b1c9
+                81a305129b903fd91f511efc5d83497e54a7c5bd75224cfdfeb120de9dff0eede77b71b2fff0ec -l ./testkey.key
+
+    SUPPORTED ALGORITHMS
+      SPHINCS+-MTL-SHAKE-128S-SIMPLE
+      SPHINCS+-MTL-SHAKE-128F-SIMPLE
+      SPHINCS+-MTL-SHAKE-192S-SIMPLE
+      SPHINCS+-MTL-SHAKE-192F-SIMPLE
+      SPHINCS+-MTL-SHAKE-256S-SIMPLE
+      SPHINCS+-MTL-SHAKE-256F-SIMPLE
+      SPHINCS+-MTL-SHA2-128S-SIMPLE
+      SPHINCS+-MTL-SHA2-128F-SIMPLE
+      SPHINCS+-MTL-SHA2-192S-SIMPLE
+      SPHINCS+-MTL-SHA2-192F-SIMPLE
+      SPHINCS+-MTL-SHA2-256S-SIMPLE
+      SPHINCS+-MTL-SHA2-256F-SIMPLE
+
+```
+
 
 ## Randomization
 Randomization is defined in the schemes table. It needs to match the underlying signature scheme randomization strategy, which can be a compile time decision for some libraries.

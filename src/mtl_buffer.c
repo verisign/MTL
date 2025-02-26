@@ -72,9 +72,17 @@ uint32_t mtl_auth_path_from_buffer(char *buffer, size_t buffer_size,
 	sig_end_ptr = sig_ptr + buffer_size;
 	path = calloc(1, sizeof(AUTHPATH));
 	mtl_rand = calloc(1, sizeof(RANDOMIZER));
+	if (path == NULL || mtl_rand == NULL) {
+		LOG_ERROR("Unable to allocate path and randomizer");
+		return 0;
+	}
 
 	// Randomizer Auth from draft-harvey-cfrg-mtl-mode-00 Section 9.4
 	mtl_rand->value = malloc(hash_size);
+	if (mtl_rand->value == NULL) {
+		LOG_ERROR("Unable to allocate space for randomizer auth");
+		return 0;
+	}
 	mtl_rand->length = hash_size;
 	VERIFY_AUTH_BUFFER_LEN	(sig_ptr, hash_size, sig_end_ptr);
 	memcpy(mtl_rand->value, sig_ptr, hash_size);
@@ -205,7 +213,7 @@ uint32_t mtl_auth_path_to_buffer(RANDOMIZER * randomizer, AUTHPATH * auth_path,
  * @param hash_size:  Length of hash algorithm output in bytes
  * @param sid_len:    Size of the MTL Series Id
  * @param ladder_ptr: Pointer to where the ladder is created
- * @return size of the authpath buffer in bytes
+ * @return size of the ladder in bytes
  */
 uint32_t mtl_ladder_from_buffer(char *buffer, size_t buffer_size,
 				uint32_t hash_size, uint16_t sid_len, LADDER ** ladder_ptr)
@@ -243,6 +251,10 @@ uint32_t mtl_ladder_from_buffer(char *buffer, size_t buffer_size,
 	// Rung from draft-harvey-cfrg-mtl-mode-00 Section 7.2
 	rung_hash_length = 8 * (size_t)hash_size * (size_t)ladder->rung_count;
 	ladder->rungs = malloc(rung_hash_length);
+	if (ladder->rungs == NULL) {
+		LOG_ERROR("Failed to allocate rung");
+		return 0;
+	}
 	for (i = 0; i < ladder->rung_count; i++) {
 		rung =
 		    (RUNG *) ((uint8_t *) ladder->rungs + (sizeof(RUNG) * i));
@@ -290,8 +302,20 @@ uint32_t mtl_ladder_to_buffer(LADDER * ladder, uint32_t hash_size,
 		return 0;
 	}
 
-	sig_size =
-	    4 + ladder->sid.length + ((8 + hash_size) * ladder->rung_count);
+	if ((ladder->sid.length > 64) || (hash_size > 64)) {
+		// The hash size and SID should not be more than 512 bits
+		LOG_ERROR("Invalid hash length and/or SID length");
+		return 0;		
+	}
+	sig_size = 4 + ladder->sid.length;
+	
+	if (ladder->rung_count > 33) {
+		// For a UINT32 leaf index this should not be more than 33 levels
+		LOG_ERROR("Invalid ladder rung count");
+		return 0;	
+	}
+	sig_size += ((8 + hash_size) * ladder->rung_count);
+	
 	sig_buffer = malloc(sig_size);
 	if(sig_buffer == NULL) {
 		LOG_ERROR("Unable to allocate buffer memory");

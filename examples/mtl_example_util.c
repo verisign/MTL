@@ -36,7 +36,6 @@
 #include <ctype.h>
 
 #include "mtl_util.h"
-#include "mtltool.h"
 #include "mtlverify.h"
 #include "mtl_example_util.h"
 
@@ -94,26 +93,27 @@ char *mtl_str2upper(char *data)
  */
 size_t mtl_buffer2bin(uint8_t* input, size_t input_len, uint8_t** output, data_encoding encoding) {
 	uint8_t* buffer = NULL;
-	size_t buffer_size;
-	uint8_t byte_val;
+	size_t buffer_size = 0;
+	uint8_t byte_val = 0;
 	char tmp[3];
-	int b64_len;
-	uint8_t b64_buff[MAX_BUFFER_SIZE];
+	int b64_len = 0;
+	uint8_t b64_buff[MTL_MAX_BUFFER_SIZE];
 	EVP_ENCODE_CTX *ctx = NULL;
-	int status;
-
-	if(input_len >= MAX_BUFFER_SIZE) {
-		LOG_ERROR("Invalid input length, greater than the buffer size");
-		*output = NULL;
-		return 0;
-	}
+	int status = 0;
 
 	if(encoding == BASE64_STRING) {
+		if(((input_len /4) * 3) >= MTL_MAX_BUFFER_SIZE) {
+			
+			LOG_ERROR("Invalid input length, greater than the buffer size");
+			*output = NULL;
+			return 0;
+		}
 		ctx = EVP_ENCODE_CTX_new();
 
 		EVP_DecodeInit(ctx);
 		status = EVP_DecodeUpdate(ctx, &b64_buff[0], &b64_len, input, input_len);
 		if((status != 0) && (status != 1)) {
+			LOG_ERROR("Unable to decode buffer");
 			*output = NULL;
 			EVP_ENCODE_CTX_free(ctx);
 			return 0;
@@ -121,6 +121,7 @@ size_t mtl_buffer2bin(uint8_t* input, size_t input_len, uint8_t** output, data_e
 		buffer_size = b64_len;
 		status = EVP_DecodeFinal(ctx, &b64_buff[b64_len], &b64_len);
 		if(status != 1) {
+			LOG_ERROR("Unable to decode buffer");
 			*output = NULL;
 			EVP_ENCODE_CTX_free(ctx);
 			return 0;			
@@ -130,6 +131,13 @@ size_t mtl_buffer2bin(uint8_t* input, size_t input_len, uint8_t** output, data_e
 		memcpy(buffer, &b64_buff[0], buffer_size);
 		EVP_ENCODE_CTX_free(ctx);
 	} else {
+		if(input_len >= MTL_MAX_BUFFER_SIZE) {
+			
+			LOG_ERROR("Invalid input length, greater than the buffer size");
+			*output = NULL;
+			return 0;
+		}
+
 		if(input_len % 2 != 0) {
 			*output = NULL;
 			return 0;				
@@ -151,6 +159,49 @@ size_t mtl_buffer2bin(uint8_t* input, size_t input_len, uint8_t** output, data_e
 	}
 	*output = buffer;
 	return buffer_size;
+}
+
+/*****************************************************************
+* Convert and write out the buffer in the appropriate format
+******************************************************************
+ * @param buffer        Byte buffer to print
+ * @param buffer_len    Length of the byte buffer
+ * @param output        Output stream to use
+ * @param encoding      Enum type indicating if data is BASE64 or HEX
+ * @param newline       Flag that indicates if a newline should be added to the end
+ * @return None
+ */
+#define B64_BLOCK_SIZE 3
+void mtl_write_buffer(uint8_t* buffer, size_t buffer_len, FILE* output, data_encoding encoding, bool newline) {
+    uint8_t output_buff[B64_BLOCK_SIZE+1];
+	size_t i = 0;
+	size_t start = 0;
+	size_t length = 0;
+
+    // Output the ladder buffer
+    if(encoding == BASE64_STRING) {
+		// Encode in blocks (each block is 3 bytes)		
+		i = buffer_len;
+		while(i > 0) {
+			start = buffer_len - i;
+			if(i >= B64_BLOCK_SIZE) {
+				length = B64_BLOCK_SIZE;
+			} else {
+				length = i;
+			}
+			EVP_EncodeBlock(&output_buff[0], &buffer[start], length);
+			fprintf(output,"%s", output_buff);
+			i = i - length;
+		}
+    } else {
+		// Encode in bytes		
+        for(i=0; i<buffer_len; i++) {
+            fprintf(output,"%02x", buffer[i]);
+        }					
+    }	
+    if(newline) {
+        fprintf(output,"\n");
+    }	
 }
 
 static void verbose_print_block(char* descript, FILE* stream) {

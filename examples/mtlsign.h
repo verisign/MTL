@@ -30,37 +30,39 @@
 	ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 	POSSIBILITY OF SUCH DAMAGE.
 */
-/**
- *  \file mtl_error.h
- *  \brief MTL macro functions that can report macros or disable error reporting.
-*/
-#ifndef __MTL_ERROR_H__
-#define __MTL_ERROR_H__
+#ifndef __MTL_SIGN_TOOL_H__
+#define __MTL_SIGN_TOOL_H__
 
-#include <stdio.h>
+#include <stdint.h>
+#include "mtl_example_util.h"
 
-// #definitions
-/** Definition declaring logging is on by default (1) - Remove or undeclare to stop error logging. */
-#define MTL_DEBUG_LOG 1
+/* Type definitions */
+// Quick linked list for leaf node ids
+typedef struct leaf_queue
+{
+	uint32_t leaf_id;
+	char *filename;
+	struct leaf_queue *next;
+} leaf_queue;
 
-#if MTL_DEBUG_LOG == 1
-/** Logging Function Macro definition */
-#define LOG_ERROR(msg)  if(1) {fprintf(stderr,"\x1B[31m    "\
-                               "ERROR (%s:%s:%d): %s\x1B[0m\n",\
-                               __FILE__,__FUNCTION__,__LINE__,msg);}
-#else
-#define LOG_ERROR(msg)
-#endif
+/*****************************************************************
+ * Setup a private key
+ ******************************************************************
+ * @param pkey          Private key buffer
+ * @param pkey_length   Length of the private key buffer
+ * @param sk, secret key value
+ * @param sk_len, length of the secret key
+ * @param pk, public key value
+ * @param pk_len, length of the public key
+ * @param keystr: string name of the used signature algorithm
+ * @param randomize: flag indicating if randomization should be used
+ * @param params, Underlying singnature scheme parameters
+ * @param algo_type, Algorithm type identifier 
+ * @return MTL context for verification of MTL signatures
+ */
+MTL_CTX *setup_private_key(uint8_t *pkey, size_t pkey_len,
+						   uint8_t **sk, uint32_t *sk_len,
+						   uint8_t **pk, uint32_t *pk_len, char **keystr,
+						   uint16_t *randomize, void **params, uint8_t *algo_type);
 
-// Return Status Values
-/** MTL status return code */ 
-#ifndef MTL_RETURN_CODES_DEF
-#define MTL_RETURN_CODES_DEF 1
-typedef enum { MTL_OK, MTL_NULL_PTR, MTL_RESOURCE_FAIL, MTL_BAD_PARAM, MTL_ERROR, MTL_BOGUS } MTLSTATUS;
-#define LOG_ERROR_WITH_CODE(ftn,code)  if(1) { \
-	static const char* MTLSTATUS_STR[] = { "MTL_OK", "MTL_NULL_PTR", "MTL_RESOURCE_FAIL", "MTL_BAD_PARAM", "MTL_ERROR", "MTL_BOGUS" };\
-	fprintf(stderr,"\x1B[31mERROR (%s:%s:%d): %s returned %s\x1B[0m\n",\
-            __FILE__,__FUNCTION__,__LINE__,ftn,MTLSTATUS_STR[code]);}
-#endif
-
-#endif				// __MTL_ERROR_H
+#endif //__MTL_SIGN_TOOL_H__

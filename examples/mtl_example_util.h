@@ -30,16 +30,52 @@
 	ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 	POSSIBILITY OF SUCH DAMAGE.
 */
-#ifndef __MTL_VERBOSE_OUTPUT_H__
-#define __MTL_VERBOSE_OUTPUT_H__
+#ifndef __MTL_EXAMPLE_UTIL_H__
+#define __MTL_EXAMPLE_UTIL_H__
+
+#include <stdbool.h>
 
 #include "mtl.h"
-#include "mtltool.h"
-#include "mtlverify.h"
 
-#define MAX_BUFFER_SIZE 65535
+/* Type definitions */
+typedef enum {
+	HEX_STRING,
+	BASE64_STRING,
+} data_encoding;
 
+#define ALG_NONE 0
+#define SPX_ALG_SHAKE 1
+#define SPX_ALG_SHA2  2
+
+#define SIMPLE 0
+#define ROBUST 1
+
+typedef struct ALGORITHM {
+	char *name;
+	uint16_t sec_param;
+	uint16_t nist_level;
+	uint8_t randomize;
+	uint8_t robust;
+	char opt;
+	uint8_t algo;
+	char *oqs_str;
+	uint8_t oid_len;
+	uint8_t oid[16];
+} ALGORITHM;
+
+/* Helper macros */
+#define PKSEED_INIT(ptr, value, len)  {ptr.length=len; memcpy(ptr.seed, value, len);}
+#define PKROOT_INIT(ptr, value, len)  {ptr.length=len; memcpy(ptr.key, value, len);}
+#define SKPRF_INIT(ptr, value, len)   {ptr.length=len; memcpy(ptr.data, value, len);}
+#define SKPRF_CLEAR(ptr, len)         {ptr.length=len; memset(ptr.data, 0, len);}
+
+#define LOG_MESSAGE(msg, buffer) if(buffer!=NULL) {fprintf(buffer,"%s\n", msg);}
+
+#define MTL_MAX_BUFFER_SIZE 65535
+
+/* Function prototypes */
 size_t mtl_buffer2bin(uint8_t* input, size_t input_len, uint8_t** output, data_encoding encoding);
+void mtl_write_buffer(uint8_t* buffer, size_t buffer_len, FILE* output, data_encoding encoding, bool newline);
 ALGORITHM *get_underlying_signature(char *algo_str, ALGORITHM* algos);
 char *mtl_str2upper(char *data);
 void mtl_print_auth_path(AUTHPATH* auth_path, RANDOMIZER* mtl_rand, uint32_t hash_len, FILE *stream);
@@ -50,4 +86,4 @@ void mtl_print_message(uint8_t* message, uint32_t message_len, FILE* stream);
 void mtl_print_signature_scheme(ALGORITHM* algo, FILE* stream);
 void mtl_print_mtl_buffer(char* label, uint8_t *buffer, uint32_t buffer_length, FILE* stream);
 
-#endif  // __MTL_VERBOSE_OUTPUT_H__
+#endif  // __MTL_EXAMPLE_UTIL_H__

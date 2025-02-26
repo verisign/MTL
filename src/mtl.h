@@ -38,6 +38,8 @@
 #ifndef __MTL_IMPL_H__
 #define __MTL_IMPL_H__
 
+#define MTL_LIB_VERSION "v1.1.1"
+
 #include <math.h>
 #include <openssl/evp.h>
 #include <stdint.h>
@@ -47,10 +49,6 @@
 
 /** The default MTL Series Identifier Size (specified to 8 bytes whey using a random SEED) */ 
 #define MTL_SID_SIZE 8
-
-// Return Status Values
-/** MTL status return code */ 
-typedef enum { MTL_OK, MTL_NULL_PTR, MTL_RESOURCE_FAIL } MTLSTATUS;
 
 // Data Structures
 /**
@@ -192,18 +190,19 @@ MTLSTATUS mtl_set_scheme_functions(MTL_CTX * ctx, void *parameters,
  * @param ctx:         the context for this MTL Node Set
  * @param message:     byte array of message data
  * @param message_len: byte length of the message data
- * @return node_id:    Index of the leaf node that was appended
+ * @param node_id:     return value index of the leaf node that was appended
+ * @return MTL_OK on success
  */							
-uint32_t mtl_hash_and_append(MTL_CTX * ctx, uint8_t * message,
-			     uint16_t message_len);
+MTLSTATUS mtl_hash_and_append(MTL_CTX * ctx, uint8_t * message,
+			     uint16_t message_len, uint32_t * node_id);
 
 /**
  * Setup the MTL randomizer value
  * @param ctx:         the context for this MTL Node Set
  * @param randomizer:  pointer to a randomizer buffer
- * @return 0 on success int on failure
+ * @return MTL_OK on success, other on failure
  */				 
-uint8_t mtl_generate_randomizer(MTL_CTX * ctx, RANDOMIZER ** randomizer);
+MTLSTATUS mtl_generate_randomizer(MTL_CTX * ctx, RANDOMIZER ** randomizer);
 
 /**
  * Free the MTL randomizer value
@@ -218,9 +217,9 @@ MTLSTATUS mtl_randomizer_free(RANDOMIZER * mtl_random);
  * @param leaf_index: index of the leaf node that is being appended
  * @param randomizer: pointer to randomizer buffer 
  * @param auth:       pointer to authpath buffer
- * @return R0 on success
+ * @return MTL_OK on success
  */
-uint8_t mtl_randomizer_and_authpath(MTL_CTX * ctx, uint32_t leaf_index,
+MTLSTATUS mtl_randomizer_and_authpath(MTL_CTX * ctx, uint32_t leaf_index,
 				    RANDOMIZER ** randomizer, AUTHPATH ** auth);
 
 /**
@@ -232,15 +231,14 @@ uint8_t mtl_randomizer_and_authpath(MTL_CTX * ctx, uint32_t leaf_index,
  * @param randomizer: randomizer value for this leaf node
  * @param auth_path: authenticaiton path to verify
  * @param assoc_rung: rung used to verify this auth path
- * @return 0 on success, int on failure
+ * @return MTL_OK on success
  */
-uint8_t mtl_hash_and_verify(MTL_CTX * ctx, uint8_t * message,
+MTLSTATUS mtl_hash_and_verify(MTL_CTX * ctx, uint8_t * message,
 			    uint16_t message_len, RANDOMIZER * randomizer,
 			    AUTHPATH * auth_path, RUNG * assoc_rung);
 
 /**
- * Generate the message hash with randomization and then verify
- * the hash with the authenticaiton path
+ * Create buffer for ladder including address separation scheme
  * @param ctx:  the context for this MTL Node Set
  * @param ladder: ladder buffer pointer
  * @param hash_size: size of the hash in bytes
@@ -272,9 +270,9 @@ MTLSTATUS mtl_initns(MTL_CTX ** mtl_ctx, SEED *seed, SERIESID * sid, char* ctx_s
  * @param data_value byte array of data_value data
  * @param data_value_len length of the data_value byte array
  * @param leaf_index index of the leaf node that is being appended
- * @return 0 on success or error num on failureß
+ * @return MTL_OK on success
  */
-uint8_t mtl_append(MTL_CTX * ctx, uint8_t * data_value,
+MTLSTATUS mtl_append(MTL_CTX * ctx, uint8_t * data_value,
 		   uint16_t data_value_len, uint32_t leaf_index);
 
 /**
@@ -282,7 +280,7 @@ uint8_t mtl_append(MTL_CTX * ctx, uint8_t * data_value,
  * mtl_authpath from draft-harvey-cfrg-mtl-mode-00 Section 8.5
  * @param ctx  the context for this MTL Node Set 
  * @param leaf_index leaf node index of the data value to authenticate
- * @return auth_path authentication path from the leaf node to the associated rung 
+ * @return auth_path authentication path from the leaf node to the associated rung, or NULL on error 
  */		   
 AUTHPATH *mtl_authpath(MTL_CTX * ctx, uint32_t leaf_index);
 
@@ -290,7 +288,7 @@ AUTHPATH *mtl_authpath(MTL_CTX * ctx, uint32_t leaf_index);
  * Algorithm 6: Computing a Merkle Tree Ladder for a Node Set.
  * mtl_ladder from draft-harvey-cfrg-mtl-mode-00 Section 8.6
  * @param ctx  the context for this MTL Node Set 
- * @return ladder Merkle tree ladder for this node set
+ * @return ladder Merkle tree ladder for this node set, or NULL on error
  */
 LADDER *mtl_ladder(MTL_CTX * ctx);
 
@@ -299,7 +297,7 @@ LADDER *mtl_ladder(MTL_CTX * ctx);
  * mtl_rung from draft-harvey-cfrg-mtl-mode-00 Section 8.7
  * @param auth_path authentication path that needs to be covered
  * @param ladder Merkle tree ladder to authenticate relative to
- * @return assoc_rung the rung in the ladder associated with the authentication path or None
+ * @return assoc_rung the rung in the ladder associated with the authentication path, or NULL on error
  */
 RUNG *mtl_rung(AUTHPATH * auth_path, LADDER * ladder);
 
@@ -312,9 +310,9 @@ RUNG *mtl_rung(AUTHPATH * auth_path, LADDER * ladder);
  * @param data_value_len length of the data_value byte array
  * @param auth_path (presumed) authentication path from corresponding leaf node to rung of ladder covering leaf node
  * @param assoc_rung Merkle tree rung to authenticate relative to
- * @return result a Boolean indicating whether the data value is  successfully authenticated
+ * @return MTL_OK if the data value is successfully authenticated
  */
-uint8_t mtl_verify(MTL_CTX * ctx, uint8_t * data_value,
+MTLSTATUS mtl_verify(MTL_CTX * ctx, uint8_t * data_value,
 		   uint16_t data_value_len, AUTHPATH * auth_path,
 		   RUNG * assoc_rung);
 
@@ -372,7 +370,7 @@ uint32_t mtl_auth_path_to_buffer(RANDOMIZER * randomizer, AUTHPATH * auth_path,
  * @param hash_size   Length of hash algorithm output in bytes
  * @param sid_len     Size of the MTL Series Id
  * @param ladder_ptr  Pointer to where the ladder is created
- * @return size of the authpath buffer in bytes
+ * @return size of the ladder buffer in bytes
  */
 uint32_t mtl_ladder_from_buffer(char *buffer, size_t buffer_size,
 				uint32_t hash_size, uint16_t sid_len, LADDER ** ladder_ptr);

@@ -43,11 +43,13 @@
 #include <openssl/evp.h>
 #include <stdint.h>
 
+#include "mtl_error.h"
+
 // Definition of constants used in this application
 /** Maximum tree pages allowed to be allocated 
  * \todo Make this configurable for each key set rather than library wide for future use.
 */
-#define MTL_TREE_MAX_PAGES 1024
+#define MTL_TREE_MAX_PAGES 8192
 /** Maximum tree pages size in bytes 
  * \todo Make this configurable for each key set rather than library wide for future use.
 */
@@ -55,7 +57,18 @@
 /** Maximum randomizer pages allowed to be allocated
  * \todo Make this configurable for each key set rather than library wide for future use.
 */
-#define MTL_TREE_RANDOMIZER_PAGES 1024
+#define MTL_TREE_RANDOMIZER_PAGES 8192
+
+
+/** Maximum leaf index supported by a single set
+ * 
+ */
+#define MTL_NODE_SET_MAX_LEAF (uint32_t)0x7fffffff
+
+/** Maximum index supported by an node set
+ * 
+ */
+#define MTL_NODE_SET_MAX_INDEX (2*MTL_NODE_SET_MAX_LEAF)
 
 // Data structures
 /**
@@ -82,7 +95,10 @@ typedef struct SEED {
  * \brief MTL Node Set Context Structure
  */
 typedef struct MTLNODES {
-	/** Current count of leaf nodes covered by this node set */		
+	/** Current count of leaf nodes covered by this node set 
+	 * 	We assume leaves are added in order, and any operation 
+	 * 	which inserts a node also inserts any lower-index nodes
+	 */		
 	uint32_t leaf_count;
 	/** Size (in bytes) of the hash that is used in the MTL tree */		
 	uint16_t hash_size;
@@ -118,9 +134,9 @@ void mtl_node_set_free(MTLNODES * nodes);
  * @param left left index of the node to insert
  * @param right right index of the node to insert
  * @param hash hash value to insert
- * @return 0 if successful
+ * @return MTL_OK if successful
  */
-uint8_t mtl_node_set_insert(MTLNODES * nodes, uint32_t left, uint32_t right,
+MTLSTATUS mtl_node_set_insert(MTLNODES * nodes, uint32_t left, uint32_t right,
 			    uint8_t * hash);
 
 /**
@@ -128,9 +144,9 @@ uint8_t mtl_node_set_insert(MTLNODES * nodes, uint32_t left, uint32_t right,
  * @param nodes Pointer to MTL node context to initalize
  * @param leaf_index The leaf index that utilizes the randomizer
  * @param rand randomizer value to insert (NULL for none)
- * @return none
+ * @return MTL_OK if successful
  */
-uint8_t mtl_node_set_insert_randomizer(MTLNODES * nodes,
+MTLSTATUS mtl_node_set_insert_randomizer(MTLNODES * nodes,
 				       uint32_t leaf_index, uint8_t * rand);
 
 /**
@@ -139,9 +155,9 @@ uint8_t mtl_node_set_insert_randomizer(MTLNODES * nodes,
  * @param left left index of the node to fetch
  * @param right right index of the node to fetch
  * @param hash pointer to fill with the hash value (caller must free)
- * @return 0 if successful
+ * @return MTL_OK if successful
  */					   
-uint8_t mtl_node_set_fetch(MTLNODES * node_set, uint32_t left, uint32_t right,
+MTLSTATUS mtl_node_set_fetch(MTLNODES * node_set, uint32_t left, uint32_t right,
 			   uint8_t ** hash);
 
 /**
@@ -149,18 +165,20 @@ uint8_t mtl_node_set_fetch(MTLNODES * node_set, uint32_t left, uint32_t right,
  * @param nodes Pointer to the MTLNS structure
  * @param leaf leaf index of the randomizer to fetch
  * @param rand pointer to fill with the hash value (caller must free)
- * @return 0 if successful
+ * @return MTL_OK if successful
  */			   
-uint8_t mtl_node_set_get_randomizer(MTLNODES * nodes, uint32_t leaf,
+MTLSTATUS mtl_node_set_get_randomizer(MTLNODES * nodes, uint32_t leaf,
 				    uint8_t ** rand);
 
 /**
  *  MTLNS mapping function from left/right to linear page array
- * @param left left index of the node to insert
- * @param right right index of the node to insert
- * @return array index
- */					
-uint32_t mtl_node_set_int_node_id(uint32_t left, uint32_t right);
+ * @param left: left index of the node to insert
+ * @param right: right index of the node to insert
+ * @param return_index: output address for index of left and right LCA
+ * @return MTL_OK if successful, and *return_index set
+ * 			MTL_ERROR if <left,right> is not a valid node
+ */
+MTLSTATUS mtl_node_set_int_node_id(uint32_t left, uint32_t right, uint32_t * return_index);
 
 /**
  *  MTL implementation of bit_width
