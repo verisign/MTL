@@ -1,5 +1,5 @@
 /*
-	Copyright (c) 2024, VeriSign, Inc.
+	Copyright (c) 2025, VeriSign, Inc.
 	All rights reserved.
 
 	Redistribution and use in source and binary forms, with or without
@@ -170,12 +170,6 @@ MTLSTATUS mtl_append(MTL_CTX * ctx,
 		   uint16_t data_value_len, uint32_t leaf_index)
 {
 	uint8_t hash[EVP_MAX_MD_SIZE];
-	uint32_t left_index;
-	uint32_t mid_index;
-	uint32_t index;
-	uint8_t *hash_left;
-	uint8_t *hash_right;
-	MTLSTATUS return_code;
 
 	if ((ctx == NULL) || (data_value == NULL) || data_value_len == 0) {
 		LOG_ERROR("NULL Input Pointers");
@@ -201,6 +195,37 @@ MTLSTATUS mtl_append(MTL_CTX * ctx,
 		LOG_ERROR("Unable to add message to node set");
 		return MTL_ERROR;
 	}
+
+	if (mtl_node_set_update_parents(ctx, leaf_index) != MTL_OK) {
+		LOG_ERROR("Unable to add message to node set");
+		return MTL_ERROR;		
+	}
+
+	return MTL_OK;
+}
+
+/*****************************************************************
+* MTL Node Set Update Parent Hashes
+******************************************************************
+ * @param ctx,  the context for this MTL Node Set
+ * @param leaf_index: index of the leaf node that is being appended
+ * @return MTL_OK on success
+ */
+MTLSTATUS mtl_node_set_update_parents(MTL_CTX * ctx, uint32_t leaf_index)
+{
+	uint32_t index;
+	uint8_t *hash_left;
+	uint8_t *hash_right;
+	uint8_t hash[EVP_MAX_MD_SIZE];
+	uint32_t left_index;
+	uint32_t mid_index;	
+	MTLSTATUS return_code;	
+
+	if (ctx == NULL) {
+		LOG_ERROR_WITH_CODE("mtl_node_set_insert", MTL_ERROR);
+		return MTL_ERROR;
+	}
+
 	// Complete the parent hashes in the tree
 	for (index = 1; index <= mtl_lsb(leaf_index + 1); index++) {
 		left_index = leaf_index - (1 << index) + 1;
@@ -243,6 +268,7 @@ MTLSTATUS mtl_append(MTL_CTX * ctx,
 	}
 	return MTL_OK;
 }
+
 
 /*****************************************************************
 * Algorithm 5: Computing an Authentication Path for a Data Value.
@@ -566,9 +592,7 @@ MTLSTATUS mtl_verify(MTL_CTX * ctx, uint8_t * data_value,
 MTLSTATUS mtl_free(MTL_CTX * ctx)
 {
 	mtl_node_set_free(&ctx->nodes);
-	if(ctx->ctx_str != NULL) {
-		free(ctx->ctx_str);
-	}
+	free(ctx->ctx_str);
 	free(ctx);
 	ctx = NULL;
 
@@ -584,10 +608,7 @@ MTLSTATUS mtl_free(MTL_CTX * ctx)
 MTLSTATUS mtl_authpath_free(AUTHPATH * path)
 {
 
-	if (path->sibling_hash != NULL) {
-		free(path->sibling_hash);
-	}
-
+	free(path->sibling_hash);
 	free(path);
 	path = NULL;
 
@@ -602,9 +623,7 @@ MTLSTATUS mtl_authpath_free(AUTHPATH * path)
  */
 MTLSTATUS mtl_ladder_free(LADDER * ladder)
 {
-	if (ladder->rungs != NULL) {
-		free(ladder->rungs);
-	}
+	free(ladder->rungs);
 	free(ladder);
 	ladder = NULL;
 
