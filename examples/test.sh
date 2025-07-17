@@ -3,26 +3,26 @@
 clear
 set -e
 
-mkdir -p tmp
+TD=$(mktemp -d XXXXXXXXXX)
 
 # Change the range values to test more or less signatures
 for i in {1..10}
 do
-    head -c 10 /dev/urandom > "tmp/message$i.msg"
+    head -c 10 /dev/urandom > "$TD/message$i.msg"
 done
 
-declare -a schemes=("SPHINCS+-MTL-SHAKE-128S-SIMPLE"
-                    "SPHINCS+-MTL-SHAKE-128F-SIMPLE"
-                    "SPHINCS+-MTL-SHAKE-192S-SIMPLE"
-                    "SPHINCS+-MTL-SHAKE-192F-SIMPLE"
-                    "SPHINCS+-MTL-SHAKE-256S-SIMPLE"
-                    "SPHINCS+-MTL-SHAKE-256F-SIMPLE" 
-                    "SPHINCS+-MTL-SHA2-128S-SIMPLE" 
-                    "SPHINCS+-MTL-SHA2-128F-SIMPLE"
-                    "SPHINCS+-MTL-SHA2-192S-SIMPLE"
-                    "SPHINCS+-MTL-SHA2-192F-SIMPLE" 
-                    "SPHINCS+-MTL-SHA2-256S-SIMPLE" 
-                    "SPHINCS+-MTL-SHA2-256F-SIMPLE")
+declare -a schemes=("SLH-DSA-MTL-SHAKE-128S"
+                    "SLH-DSA-MTL-SHAKE-128F"
+                    "SLH-DSA-MTL-SHAKE-192S"
+                    "SLH-DSA-MTL-SHAKE-192F"
+                    "SLH-DSA-MTL-SHAKE-256S"
+                    "SLH-DSA-MTL-SHAKE-256F" 
+                    "SLH-DSA-MTL-SHA2-128S" 
+                    "SLH-DSA-MTL-SHA2-128F"
+                    "SLH-DSA-MTL-SHA2-192S"
+                    "SLH-DSA-MTL-SHA2-192F" 
+                    "SLH-DSA-MTL-SHA2-256S" 
+                    "SLH-DSA-MTL-SHA2-256F")
 
 FL=$(find . -type f -name "*.msg" -print0 | xargs -0 printf "%s ")
 
@@ -31,12 +31,12 @@ FL=$(find . -type f -name "*.msg" -print0 | xargs -0 printf "%s ")
 ###################################################################
 for i in "${schemes[@]}"
 do
-    rm -rf tmp/testkey.key
-    KG=$( TIMEFORMAT="%R"; { time ( ./mtlkeygen tmp/testkey.key "$i" > tmp/keygen.output.shell ); } 2>&1 ) 
-    PK=$( cat tmp/keygen.output.shell | cut -d "," -f 3)
+    rm -rf $TD/testkey.key
+    KG=$( TIMEFORMAT="%R"; { time ( ./mtlkeygen $TD/testkey.key "$i" > $TD/keygen.output.shell ); } 2>&1 ) 
+    PK=$( cat $TD/keygen.output.shell | cut -d "," -f 3)
 
-    SM=$( TIMEFORMAT="%R"; { time ( ./mtlsign -l tmp/testkey.key $FL > tmp/sign.output.shell ); } 2>&1 ) 
-    grep "Ladder," tmp/sign.output.shell | cut -d "," -f 3 | xxd -r -p > tmp/verify.ladder
+    SM=$( TIMEFORMAT="%R"; { time ( ./mtlsign -l $TD/testkey.key $FL > $TD/sign.output.shell ); } 2>&1 ) 
+    grep "Ladder," $TD/sign.output.shell | cut -d "," -f 3 | xxd -r -p > $TD/verify.ladder
 
     SIGNATURES=0
     VM=0
@@ -44,7 +44,7 @@ do
     FAILURES=0
     while IFS=',' read -r message leaf authpath; do
         if [[ "$leaf" != "" ]]; then
-            VMT=$( TIMEFORMAT="%R"; { time ( ./mtlverify -q $i $PK $(cat $message | xxd -p) $authpath -l tmp/verify.ladder > tmp/verify.output.shell ); } 2>&1 ) 
+            VMT=$( TIMEFORMAT="%R"; { time ( ./mtlverify -q $i $PK $(cat $message | xxd -p) $authpath -l $TD/verify.ladder > $TD/verify.output.shell ); } 2>&1 ) 
             if [ $? -ne 0 ]; then
                 ((FAILURES++))
                 echo "!!!! ERROR - Verification Error on $leaf for scheme $i"
@@ -52,9 +52,9 @@ do
             VM=$(echo "$VM + $VMT" | bc)
             SIGNATURES=$((SIGNATURES + 1))            
         fi
-    done < tmp/sign.output.shell
+    done < $TD/sign.output.shell
 
-    RECORDS=$(find tmp/ -mindepth 1 -type f -name "*.msg" -printf x | wc -c)
+    RECORDS=$(find $TD/ -mindepth 1 -type f -name "*.msg" -printf x | wc -c)
 
     echo "  Scheme $i"
     echo "    Records Signed        = $RECORDS messages"
@@ -74,19 +74,19 @@ done
 # Change the range values to test more or less signatures
 for F in $FL
 do
-    cat $F | base64 -w 0 > tmp/tmp.file
-    mv tmp/tmp.file $F
+    cat $F | base64 -w 0 > $TD/tmp.file
+    mv $TD/tmp.file $F
 done
 
 for i in "${schemes[@]}"
 do
-    rm -rf tmp/testkey.key
-    KG=$( TIMEFORMAT="%R"; { time ( ./mtlkeygen tmp/testkey.key "$i" > tmp/keygen.output.shell ); } 2>&1 ) 
-    PK=$( cat tmp/keygen.output.shell | cut -d "," -f 3)
+    rm -rf $TD/testkey.key
+    KG=$( TIMEFORMAT="%R"; { time ( ./mtlkeygen $TD/testkey.key "$i" > $TD/keygen.output.shell ); } 2>&1 ) 
+    PK=$( cat $TD/keygen.output.shell | cut -d "," -f 3)
 
-    SM=$( TIMEFORMAT="%R"; { time ( ./mtlsign -b -l tmp/testkey.key $FL > tmp/sign.output.shell ); } 2>&1 ) 
-    rm -rf tmp/verify.b64.ladder > /dev/null 
-    grep "Ladder," tmp/sign.output.shell | sed 's/Ladder,,//g' > tmp/verify.b64.ladder
+    SM=$( TIMEFORMAT="%R"; { time ( ./mtlsign -b -l $TD/testkey.key $FL > $TD/sign.output.shell ); } 2>&1 ) 
+    rm -rf $TD/verify.b64.ladder > /dev/null 
+    grep "Ladder," $TD/sign.output.shell | sed 's/Ladder,,//g' > $TD/verify.b64.ladder
 
     SIGNATURES=0
     VM=0
@@ -94,7 +94,7 @@ do
     FAILURES=0
     while IFS=',' read -r message leaf authpath binpath; do
         if [[ "$leaf" != "" ]]; then
-            VMT=$( TIMEFORMAT="%R"; { time ( ./mtlverify -b -q $i $(echo $PK | xxd -r -p | base64 -w 0) $(cat $message ) $authpath -l tmp/verify.b64.ladder > tmp/verify.output.shell ); } 2>&1 ) 
+            VMT=$( TIMEFORMAT="%R"; { time ( ./mtlverify -b -q $i $(echo $PK | xxd -r -p | base64 -w 0) $(cat $message ) $authpath -l $TD/verify.b64.ladder > $TD/verify.output.shell ); } 2>&1 ) 
             if [ $? -ne 0 ]; then
                 ((FAILURES++))
                 echo "!!!! ERROR - Verification Error on $leaf for scheme $i"
@@ -102,9 +102,9 @@ do
             VM=$(echo "$VM + $VMT" | bc)
             SIGNATURES=$((SIGNATURES + 1))            
         fi
-    done < tmp/sign.output.shell
+    done < $TD/sign.output.shell
 
-    RECORDS=$(find tmp/ -mindepth 1 -type f -name "*.msg" -printf x | wc -c)
+    RECORDS=$(find $TD/ -mindepth 1 -type f -name "*.msg" -printf x | wc -c)
 
     echo "  Scheme $i (Base64 Inputs)"
     echo "    Records Signed        = $RECORDS messages"
@@ -117,4 +117,4 @@ do
 
 done
 
-rm -rf tmp
+rm -rf $TD

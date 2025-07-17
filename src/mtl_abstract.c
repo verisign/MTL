@@ -1,5 +1,5 @@
 /*
-	Copyright (c) 2024, VeriSign, Inc.
+	Copyright (c) 2025, VeriSign, Inc.
 	All rights reserved.
 
 	Redistribution and use in source and binary forms, with or without
@@ -36,6 +36,8 @@
 #include "mtl_node_set.h"
 #include "mtl_spx.h"
 
+#include <openssl/rand.h>
+
 /************************************************************************
  * The following algorithms are abstractions that use the constructs 
  * that are defined in draft-harvey-cfrg-mtl-mode-00 to simplify use.
@@ -50,7 +52,6 @@
  */
 MTLSTATUS mtl_generate_randomizer(MTL_CTX * ctx, RANDOMIZER ** randomizer)
 {
-	FILE *fd = NULL;
 	RANDOMIZER *mtl_random;
 
 	if ((ctx == NULL) || (randomizer == NULL)) {
@@ -66,13 +67,12 @@ MTLSTATUS mtl_generate_randomizer(MTL_CTX * ctx, RANDOMIZER ** randomizer)
 			LOG_ERROR("Unable to allocate buffer");
 			return MTL_RESOURCE_FAIL;
 		}
+
 		// Get random bytes and copy to buffer
-		if ((fd = fopen("/dev/random", "r")) == NULL) {
+        if(!RAND_bytes(mtl_random->value, mtl_random->length)) {
 			LOG_ERROR("Unable to generate random data");
 			return MTL_RESOURCE_FAIL;
 		}
-		fread(mtl_random->value, mtl_random->length, 1, fd);
-		fclose(fd);
 	} else {
 		mtl_random->length = ctx->seed.length;
 		if ((mtl_random->value = malloc(mtl_random->length)) == NULL) {
@@ -96,9 +96,7 @@ MTLSTATUS mtl_generate_randomizer(MTL_CTX * ctx, RANDOMIZER ** randomizer)
 MTLSTATUS mtl_randomizer_free(RANDOMIZER * mtl_random)
 {
 	if (mtl_random != NULL) {
-		if (mtl_random->value != NULL) {
-			free(mtl_random->value);
-		}
+		free(mtl_random->value);
 		free(mtl_random);
 		mtl_random = NULL;
 	}

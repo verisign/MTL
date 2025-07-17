@@ -1,5 +1,5 @@
 /*
-	Copyright (c) 2024, VeriSign, Inc.
+	Copyright (c) 2025, VeriSign, Inc.
 	All rights reserved.
 
 	Redistribution and use in source and binary forms, with or without
@@ -34,31 +34,13 @@
 #define __MTL_VERIFY_TOOL_H__
 
 #include <stdbool.h>
-#include "mtl_example_util.h"
+#include "mtllib.h"
+#include "mtl.h"
 
 /* Type definitions */
 
 /* Function Prototypes*/
 
-/*****************************************************************
- * Parse a ladder from a buffer and verify it if possible
- ******************************************************************
- * @param ctx            An initialized MTL context
- * @param algo           Alogorithm for verifying ladder signature
- * @param buffer         Byte buffer containing the ladder
- * @param buffer_len     Length of the buffer
- * @param curr_ladder    Pointer which will return the current ladder
- * @param pk             Pointer to the public key fr verification
- * @param verbose_buffer File pointer (or null) for the verbose output
- * @param encoding       Output format desired (e.g. Base64 encoded?)
- * @param signed_ladder  Flag to print the long signature or not
- * @param quiet_mode     Flag to only print error messages
- * @return MTLSTATUS indicating MLT_OK or error value
- */
-MTLSTATUS parse_ladder(MTL_CTX *ctx, ALGORITHM *algo, uint8_t *buffer,
-					 size_t buffer_len, LADDER **curr_ladder, uint8_t *pk,
-					 FILE *verbose_buffer, data_encoding encoding,
-					 uint8_t signed_ladder, bool quiet_mode);
 
 /*****************************************************************
  * Verify the authentication path given a good ladder
@@ -75,18 +57,5 @@ MTLSTATUS parse_ladder(MTL_CTX *ctx, ALGORITHM *algo, uint8_t *buffer,
 MTLSTATUS verify_auth_path(MTL_CTX * ctx, AUTHPATH *auth_path, LADDER* ladder,
                          uint8_t* msg, size_t msg_len, RANDOMIZER *mtl_rand,
 						 FILE* verbose_buffer);
-
-
-/*****************************************************************
- * Setup a public key
- ******************************************************************
- * @param algo           MTL alogorithm identifier used
- * @param pkey           Public key used to sign the ladder
- * @param sid            MTL Series Identifier used
- * @param ctx_str        Optional signature context string
- * @return MTL context for verification of MTL signatures
- */
-MTL_CTX *setup_public_key(ALGORITHM *algo, uint8_t *pkey,
-						  SERIESID *sid, char *ctx_str);
 
 #endif //__MTL_VERIFY_TOOL_H__

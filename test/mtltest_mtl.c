@@ -1,5 +1,5 @@
 /*
-	Copyright (c) 2024, VeriSign, Inc.
+	Copyright (c) 2025, VeriSign, Inc.
 	All rights reserved.
 
 	Redistribution and use in source and binary forms, with or without
@@ -50,6 +50,8 @@ uint8_t mtltest_mtl_set_scheme_functions_null(void);
 uint8_t mtltest_mtl_append(void);
 uint8_t mtltest_mtl_append_random(void);
 uint8_t mtltest_mtl_append_null(void);
+uint8_t mtltest_mtl_node_set_update_parents(void);
+uint8_t mtltest_mtl_node_set_update_parents_null(void);
 uint8_t mtltest_mtl_authpath(void);
 uint8_t mtltest_mtl_authpath_multi(void);
 uint8_t mtltest_mtl_authpath_null(void);
@@ -78,6 +80,10 @@ uint8_t mtltest_mtl(void)
 		 "Verify MTL append function w/randomizer");
 	RUN_TEST(mtltest_mtl_append_null,
 		 "Verify MTL append function w/null parameters");
+	RUN_TEST(mtltest_mtl_node_set_update_parents,
+		 "Verify the MTL node set parent hash function");
+	RUN_TEST(mtltest_mtl_node_set_update_parents_null,
+		 "Verify the MTL node set parent hash function w/null parameters");		 
 	RUN_TEST(mtltest_mtl_authpath,
 		 "Verify MTL authentication path function");
 	RUN_TEST(mtltest_mtl_authpath_multi,
@@ -521,6 +527,195 @@ uint8_t mtltest_mtl_append_null(void)
 	assert(mtl_free(mtl_ctx) == MTL_OK);
 	free(params);
 
+	return 0;
+}
+
+/**
+ * Test the mtl node set update parent hash function
+ */
+uint8_t mtltest_mtl_node_set_update_parents(void) {
+	uint8_t buffer[32];
+	uint32_t hash_len = 32;
+	uint8_t *test_hash;
+	uint8_t empty_node[32];
+	SEED pk_seed;
+	SPX_PARAMS *params = malloc(sizeof(SPX_PARAMS));;
+	SERIESID sid;
+	MTL_CTX *mtl_ctx = NULL;
+
+	sid.length = 8;
+	memset(sid.id, 0, sid.length);
+	pk_seed.length = 32;
+	memset(pk_seed.seed, 0, 32);
+
+	assert(mtl_initns(&mtl_ctx, &pk_seed, &sid, NULL) == MTL_OK);
+	memcpy(&params->pk_seed, &pk_seed, sizeof(SEED));
+	memcpy(&params->pk_root, &pk_seed, sizeof(SEED));
+	assert(mtl_set_scheme_functions(mtl_ctx, params, 1,
+					mtl_test_hash_msg,
+					mtl_test_hash_leaf,
+					mtl_test_hash_node, NULL) == MTL_OK);
+
+	// Add hashes for leaves 0-3
+	memset(buffer, 0xff, hash_len);
+	assert(mtl_node_set_insert(&mtl_ctx->nodes, 0, 0, buffer) == MTL_OK);
+	assert(mtl_node_set_insert(&mtl_ctx->nodes, 1, 1, buffer) == MTL_OK);
+	assert(mtl_node_set_insert(&mtl_ctx->nodes, 2, 2, buffer) == MTL_OK);
+	assert(mtl_node_set_insert(&mtl_ctx->nodes, 3, 3, buffer) == MTL_OK);
+
+	// Verify the leaf hashes are correct
+	memset(buffer, 0xff, hash_len);	
+	memset(empty_node, 0x00, hash_len);		
+	assert(mtl_node_set_fetch(&mtl_ctx->nodes, 0, 0, &test_hash) == MTL_OK);
+	assert(memcmp(buffer, test_hash, hash_len) == 0);
+	assert(memcmp(empty_node, test_hash, hash_len) != 0);
+	free(test_hash);
+	assert(mtl_node_set_fetch(&mtl_ctx->nodes, 1, 1, &test_hash) == MTL_OK);
+	assert(memcmp(buffer, test_hash, hash_len) == 0);
+	assert(memcmp(empty_node, test_hash, hash_len) != 0);
+	free(test_hash);
+	assert(mtl_node_set_fetch(&mtl_ctx->nodes, 2, 2, &test_hash) == MTL_OK);
+	assert(memcmp(buffer, test_hash, hash_len) == 0);
+	assert(memcmp(empty_node, test_hash, hash_len) != 0);
+	free(test_hash);
+	assert(mtl_node_set_fetch(&mtl_ctx->nodes, 3, 3, &test_hash) == MTL_OK);
+	assert(memcmp(buffer, test_hash, hash_len) == 0);		
+	assert(memcmp(empty_node, test_hash, hash_len) != 0);
+	free(test_hash);
+
+	// Check parent hashes are blank
+	assert(mtl_node_set_fetch(&mtl_ctx->nodes, 0, 1, &test_hash) == MTL_OK);
+	assert(memcmp(buffer, test_hash, hash_len) != 0);		
+	assert(memcmp(empty_node, test_hash, hash_len) == 0);		
+	free(test_hash);
+	assert(mtl_node_set_fetch(&mtl_ctx->nodes, 2, 3, &test_hash) == MTL_OK);
+	assert(memcmp(buffer, test_hash, hash_len) != 0);		
+	assert(memcmp(empty_node, test_hash, hash_len) == 0);		
+	free(test_hash);
+	assert(mtl_node_set_fetch(&mtl_ctx->nodes, 0, 3, &test_hash) == MTL_OK);
+	assert(memcmp(buffer, test_hash, hash_len) != 0);		
+	assert(memcmp(empty_node, test_hash, hash_len) == 0);		
+	free(test_hash);
+
+	// Update parent hashe for leaf 0
+	printf("Update node set - 0\n");
+	assert(mtl_node_set_update_parents(mtl_ctx, 0) == MTL_OK);
+	printf("Update node set - 0 Done\n");
+
+	// Verify child hashes are not blank
+	assert(mtl_node_set_fetch(&mtl_ctx->nodes, 0, 0, &test_hash) == MTL_OK);
+	assert(memcmp(buffer, test_hash, hash_len) == 0);
+	assert(memcmp(empty_node, test_hash, hash_len) != 0);
+	free(test_hash);
+	assert(mtl_node_set_fetch(&mtl_ctx->nodes, 1, 1, &test_hash) == MTL_OK);
+	assert(memcmp(buffer, test_hash, hash_len) == 0);
+	assert(memcmp(empty_node, test_hash, hash_len) != 0);
+	free(test_hash);
+	assert(mtl_node_set_fetch(&mtl_ctx->nodes, 2, 2, &test_hash) == MTL_OK);
+	assert(memcmp(buffer, test_hash, hash_len) == 0);
+	assert(memcmp(empty_node, test_hash, hash_len) != 0);
+	free(test_hash);
+	assert(mtl_node_set_fetch(&mtl_ctx->nodes, 3, 3, &test_hash) == MTL_OK);
+	assert(memcmp(buffer, test_hash, hash_len) == 0);		
+	assert(memcmp(empty_node, test_hash, hash_len) != 0);
+	free(test_hash);
+
+	// Verify parent hashes are not blank
+	assert(mtl_node_set_fetch(&mtl_ctx->nodes, 0, 1, &test_hash) == MTL_OK);
+	assert(memcmp(buffer, test_hash, hash_len) != 0);		
+	assert(memcmp(empty_node, test_hash, hash_len) == 0);		
+	free(test_hash);
+	assert(mtl_node_set_fetch(&mtl_ctx->nodes, 2, 3, &test_hash) == MTL_OK);
+	assert(memcmp(buffer, test_hash, hash_len) != 0);		
+	assert(memcmp(empty_node, test_hash, hash_len) == 0);		
+	free(test_hash);
+	assert(mtl_node_set_fetch(&mtl_ctx->nodes, 0, 3, &test_hash) == MTL_OK);
+	assert(memcmp(buffer, test_hash, hash_len) != 0);		
+	assert(memcmp(empty_node, test_hash, hash_len) == 0);		
+	free(test_hash);
+
+	// Update parent hashe for leaf 1
+	assert(mtl_node_set_update_parents(mtl_ctx, 1) == MTL_OK);
+
+	// Verify child hashes are not blank
+	assert(mtl_node_set_fetch(&mtl_ctx->nodes, 0, 0, &test_hash) == MTL_OK);
+	assert(memcmp(buffer, test_hash, hash_len) == 0);
+	assert(memcmp(empty_node, test_hash, hash_len) != 0);
+	free(test_hash);
+	assert(mtl_node_set_fetch(&mtl_ctx->nodes, 1, 1, &test_hash) == MTL_OK);
+	assert(memcmp(buffer, test_hash, hash_len) == 0);
+	assert(memcmp(empty_node, test_hash, hash_len) != 0);
+	free(test_hash);
+	assert(mtl_node_set_fetch(&mtl_ctx->nodes, 2, 2, &test_hash) == MTL_OK);
+	assert(memcmp(buffer, test_hash, hash_len) == 0);
+	assert(memcmp(empty_node, test_hash, hash_len) != 0);
+	free(test_hash);
+	assert(mtl_node_set_fetch(&mtl_ctx->nodes, 3, 3, &test_hash) == MTL_OK);
+	assert(memcmp(buffer, test_hash, hash_len) == 0);		
+	assert(memcmp(empty_node, test_hash, hash_len) != 0);
+	free(test_hash);
+
+	// Verify parent hashes are not blank
+	assert(mtl_node_set_fetch(&mtl_ctx->nodes, 0, 1, &test_hash) == MTL_OK);
+	assert(memcmp(buffer, test_hash, hash_len) != 0);		
+	assert(memcmp(empty_node, test_hash, hash_len) != 0);		
+	free(test_hash);
+	assert(mtl_node_set_fetch(&mtl_ctx->nodes, 2, 3, &test_hash) == MTL_OK);
+	assert(memcmp(buffer, test_hash, hash_len) != 0);		
+	assert(memcmp(empty_node, test_hash, hash_len) == 0);		
+	free(test_hash);
+	assert(mtl_node_set_fetch(&mtl_ctx->nodes, 0, 3, &test_hash) == MTL_OK);
+	assert(memcmp(buffer, test_hash, hash_len) != 0);		
+	assert(memcmp(empty_node, test_hash, hash_len) == 0);		
+	free(test_hash);
+
+	// Update parent hashe for leaf 2 & 3
+	assert(mtl_node_set_update_parents(mtl_ctx, 2) == MTL_OK);
+	assert(mtl_node_set_update_parents(mtl_ctx, 3) == MTL_OK);
+
+	// Verify child hashes are not blank
+	assert(mtl_node_set_fetch(&mtl_ctx->nodes, 0, 0, &test_hash) == MTL_OK);
+	assert(memcmp(buffer, test_hash, hash_len) == 0);
+	assert(memcmp(empty_node, test_hash, hash_len) != 0);
+	free(test_hash);
+	assert(mtl_node_set_fetch(&mtl_ctx->nodes, 1, 1, &test_hash) == MTL_OK);
+	assert(memcmp(buffer, test_hash, hash_len) == 0);
+	assert(memcmp(empty_node, test_hash, hash_len) != 0);
+	free(test_hash);
+	assert(mtl_node_set_fetch(&mtl_ctx->nodes, 2, 2, &test_hash) == MTL_OK);
+	assert(memcmp(buffer, test_hash, hash_len) == 0);
+	assert(memcmp(empty_node, test_hash, hash_len) != 0);
+	free(test_hash);
+	assert(mtl_node_set_fetch(&mtl_ctx->nodes, 3, 3, &test_hash) == MTL_OK);
+	assert(memcmp(buffer, test_hash, hash_len) == 0);		
+	assert(memcmp(empty_node, test_hash, hash_len) != 0);
+	free(test_hash);
+
+	// Verify parent hashes are not blank
+	assert(mtl_node_set_fetch(&mtl_ctx->nodes, 0, 1, &test_hash) == MTL_OK);
+	assert(memcmp(buffer, test_hash, hash_len) != 0);		
+	assert(memcmp(empty_node, test_hash, hash_len) != 0);		
+	free(test_hash);
+	assert(mtl_node_set_fetch(&mtl_ctx->nodes, 2, 3, &test_hash) == MTL_OK);
+	assert(memcmp(buffer, test_hash, hash_len) != 0);		
+	assert(memcmp(empty_node, test_hash, hash_len) != 0);		
+	free(test_hash);
+	assert(mtl_node_set_fetch(&mtl_ctx->nodes, 0, 3, &test_hash) == MTL_OK);
+	assert(memcmp(buffer, test_hash, hash_len) != 0);		
+	assert(memcmp(empty_node, test_hash, hash_len) != 0);		
+	free(test_hash);
+
+	assert(mtl_free(mtl_ctx) == MTL_OK);
+	free(params);
+
+	return 0;
+}
+
+/**
+ * Test the mtl node set update parent hash function w/null parameters
+ */
+uint8_t mtltest_mtl_node_set_update_parents_null(void) {
+	assert(mtl_node_set_update_parents(NULL, 5) == MTL_ERROR);
 	return 0;
 }
 

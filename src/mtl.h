@@ -1,5 +1,5 @@
 /*
-	Copyright (c) 2024, VeriSign, Inc.
+	Copyright (c) 2025, VeriSign, Inc.
 	All rights reserved.
 
 	Redistribution and use in source and binary forms, with or without
@@ -38,7 +38,7 @@
 #ifndef __MTL_IMPL_H__
 #define __MTL_IMPL_H__
 
-#define MTL_LIB_VERSION "v1.1.1"
+#define MTL_LIB_VERSION "v1.1.2"
 
 #include <math.h>
 #include <openssl/evp.h>
@@ -151,6 +151,7 @@ typedef struct MTL_CTX {
  * @param hash_msg the scheme specific hash_msg function
  * @param hash_leaf the scheme specific leaf hash function
  * @param hash_node the scheme specific node hash function
+ * @param mtl_ctx the optional MTL context string
  * @return MTLSTATUS MTL_OK if successful
  */
 MTLSTATUS mtl_set_scheme_functions(MTL_CTX * ctx, void *parameters,
@@ -274,6 +275,15 @@ MTLSTATUS mtl_initns(MTL_CTX ** mtl_ctx, SEED *seed, SERIESID * sid, char* ctx_s
  */
 MTLSTATUS mtl_append(MTL_CTX * ctx, uint8_t * data_value,
 		   uint16_t data_value_len, uint32_t leaf_index);
+
+/*****************************************************************
+* MTL Node Set Update Parent Hashes
+******************************************************************
+ * @param ctx,  the context for this MTL Node Set
+ * @param leaf_index: index of the leaf node that is being appended
+ * @return MTL_OK on success
+ */
+MTLSTATUS mtl_node_set_update_parents(MTL_CTX * ctx, uint32_t leaf_index);
 
 /**
  * Algorithm 5: Computing an Authentication Path for a Data Value.

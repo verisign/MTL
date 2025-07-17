@@ -1,5 +1,5 @@
 /*
-    Copyright (c) 2024, VeriSign, Inc.
+    Copyright (c) 2025, VeriSign, Inc.
     All rights reserved.
 
     Redistribution and use in source and binary forms, with or without
@@ -41,16 +41,14 @@
 #include <unistd.h>
 #include <sys/stat.h>
 
-
 #include <oqs/sig.h>
 
-#include "mtltool_io.h"
 #include "mtl_example_util.h"
 #include "mtl_spx.h"
 #include "mtl_util.h"
-#include "schemes.h"
 
-#include "mtlsign.h"
+#include "mtllib.h"
+#include "mtllib_util.h"
 
 /*****************************************************************
  * Generate a new key for the given signature scheme string
@@ -62,99 +60,64 @@
  */
 uint8_t new_key(char *keystr, char *keyfilename, char *ctx_str)
 {
-    SERIESID sid;
-    OQS_SIG *sig = NULL;
-    FILE *fd;
-    MTL_CTX *mtl_ctx = NULL;
-    SEED seed;
-    ALGORITHM *algo = get_underlying_signature(keystr, algos);
-    uint8_t *public_key = NULL;
-    uint8_t *secret_key = NULL;
-    uint8_t ret_code = 0;
-    uint32_t i = 0;
+    size_t i = 0;
+    MTLLIB_CTX *mtl_ctx = NULL;
+    size_t buffer_len = 0;
+    uint8_t *buffer = NULL;
+    FILE *keyfile = NULL;
 
-    if (algo == NULL)
+    if (keystr == NULL)
     {
-        printf("ERROR: The algorithm (%s) was not found\n", keystr);
+        LOG_ERROR("Invalid key algorithm\n");
         return 1;
     }
-    if (keyfilename == NULL) {
-        printf("ERROR: the key filename was invalid\n");
+    if (keyfilename == NULL)
+    {
+        LOG_ERROR("the key filename was invalid\n");
         return 1;
     }
-    // Create the new underlying singnature and allocate space for keys
-    sig = OQS_SIG_new(algo->oqs_str);
-    if (sig == NULL)
-    {
-        printf("ERROR: Unable to initalize keys\n");
-        return 2;
-    }
-    public_key = malloc(sig->length_public_key);
-    secret_key = malloc(sig->length_secret_key);
 
-    if ((public_key == NULL) || (secret_key == NULL))
+    if (mtllib_key_new(keystr, &mtl_ctx, ctx_str) != MTLLIB_OK)
     {
-        printf("ERROR: Unable allocate key memory\n");
+        LOG_ERROR("the key filename was invalid\n");
         return 1;
     }
-    // Poplulate the public and secret keys
-    if (OQS_SIG_keypair(sig, public_key, secret_key) != OQS_SUCCESS)
+
+    buffer_len = mtllib_key_to_buffer(mtl_ctx, &buffer);
+
+    if ((buffer == NULL) || (buffer_len == 0))
     {
-        printf("ERROR: Unable generate keys\n");
-        return 2;
+        LOG_ERROR("Unable to get the key buffer\n");
+        return 1;
     }
-
-    // Create the MTL Attributes
-    fd = fopen("/dev/random", "r");
-    if(fd == NULL) {
-        // Unable to get the needed randomization
-        printf("ERROR: cannot generate the appropriate random values\n");
-        return 3;
+    // Write the file
+    if ((keyfile = fopen(keyfilename, "wb")) == NULL)
+    {
+        LOG_ERROR("Unable to open the keyfile");
+        free(buffer);
+        mtllib_key_free(mtl_ctx);
+        return 1;
     }
-    sid.length = 8;
-    fread(sid.id, sid.length, 1, fd);
-    fclose(fd);
+    fwrite(buffer, buffer_len, 1, keyfile);
+    free(buffer);
+    fclose(keyfile);
 
-    seed.length = algo->sec_param;
-    // Note SPHINCS+ PK = (PK.seed, PK.root)
-    memcpy(&seed.seed, public_key, seed.length);
-    mtl_initns(&mtl_ctx, &seed, &sid, ctx_str);
-
-    ret_code =
-        write_key_file(keyfilename, secret_key, sig->length_secret_key,
-                       public_key, sig->length_public_key, keystr,
-                       algo->randomize, mtl_ctx);
+    uint8_t *pubkey = NULL;
+    size_t key_len = mtllib_key_get_pubkey_bytes(mtl_ctx, &pubkey);
 
     printf("Public Key,%s,", keystr);
-    for (i = 0; i < sig->length_public_key; i++)
+    for (i = 0; i < mtl_ctx->mtl->sid.length; i++)
     {
-        printf("%02x", public_key[i]);
+        printf("%02x", mtl_ctx->mtl->sid.id[i]);
+    }
+    for (i = 0; i < key_len; i++)
+    {
+        printf("%02x", pubkey[i]);
     }
     printf("\n");
 
-    OQS_SIG_free(sig);
-    free(public_key);
-    free(secret_key);
-    mtl_free(mtl_ctx);
-
-    return ret_code;
-}
-
-/*****************************************************************
- * Print the algorithms supported
- ******************************************************************
- *
- */
-static void print_algorithms()
-{
-    uint16_t algo_idx = 0;
-
-    printf("    SUPPORTED ALGORITHMS\n");
-    while (algos[algo_idx].name != NULL)
-    {
-        printf("      %s\n", algos[algo_idx].name);
-        algo_idx++;
-    }
+    mtllib_key_free(mtl_ctx);
+    return 0;
 }
 
 /*****************************************************************
@@ -171,6 +134,7 @@ static void print_usage(void)
     printf("      0 on success or number for error\n");
     printf("\n    OPTIONS\n");
     printf("      -h    Print this tool usage help message\n");
+    printf("      -q    Do not print non-error messages");
     printf("\n    PARAMETERS\n");
     printf("      key_file      The key_file name/path where the generated key should be stored\n");
     printf("      algorithm_str The algorithm string for type of key to generate\n");
@@ -179,7 +143,8 @@ static void print_usage(void)
     printf("\n    EXAMPLE USAGE\n");
     printf("      mtlkeygen ./testkey.key SPHINCS+-MTL-SHA2-128S-SIMPLE\n");
     printf("\n");
-    print_algorithms();
+    printf("    SUPPORTED ALGORITHMS\n");
+    mtllib_key_write_algorithms(stdout);
     printf("\n");
 }
 
@@ -197,18 +162,22 @@ int main(int argc, char **argv)
     char *keyfilename = NULL;
     char *context_str = NULL;
     uint8_t result;
+    bool quiet_mode = false;
 
-	// Setup example outputs (key and signatures) to be
-	// read and write only for owner of application
-	umask(0133);
+    // Setup example outputs (key and signatures) to be
+    // read and write only for owner of application
+    umask(0177);
 
-    while ((flag = getopt(argc, argv, "h")) != -1)
+    while ((flag = getopt(argc, argv, "hq")) != -1)
     {
         switch (flag)
         {
         case 'h':
             print_usage();
             exit(0);
+            break;
+        case 'q':
+            quiet_mode = true;
             break;
         default:
             break;
@@ -220,22 +189,33 @@ int main(int argc, char **argv)
 
     if (argc < 2)
     {
-        printf("ERROR: Not enough arguments\n");
+        LOG_ERROR("Not enough arguments\n");
         print_usage();
-        return (1);
+        return 1;
     }
 
     // Check that the key filename is not in existence
-    if (access(argv[0], F_OK) == 0) {
-        printf("ERROR: key file already exists\n");
-        return (1);
+    if (access(argv[0], F_OK) == 0)
+    {
+        LOG_ERROR("key file already exists\n");
+        return 1;
     }
     algo_str = mtl_str2upper(argv[1]);
 
-    // Context String?
+    // Use a context string if it is provided
     if (argc > 2)
     {
         context_str = argv[2];
+        if (!quiet_mode)
+        {
+            printf("Using Context String: %s\n", context_str);
+        }
+    }
+
+    if (algo_str == NULL)
+    {
+        LOG_ERROR("Invalid key algorithm\n");
+        return 1;
     }
 
     result = new_key(algo_str, argv[0], context_str);

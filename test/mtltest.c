@@ -1,5 +1,5 @@
 /*
-	Copyright (c) 2024, VeriSign, Inc.
+	Copyright (c) 2025, VeriSign, Inc.
 	All rights reserved.
 
 	Redistribution and use in source and binary forms, with or without
@@ -57,6 +57,10 @@ int main(void)
 
 	// Test the abstract
 	TEST_MODULE(mtltest_mtl_abstract);
+
+	// Test the MTL Library "Wrapper" API
+	TEST_MODULE(mtltest_mtllib_util);
+	TEST_MODULE(mtltest_mtllib);
 
 	printf("MTL Test completed successfully!\n");
 	return (0);

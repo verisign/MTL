@@ -1,5 +1,5 @@
 /*
-	Copyright (c) 2024, VeriSign, Inc.
+	Copyright (c) 2025, VeriSign, Inc.
 	All rights reserved.
 
 	Redistribution and use in source and binary forms, with or without
@@ -39,31 +39,7 @@
 #include "mtlverify.h"
 #include "mtl_example_util.h"
 
- #include <openssl/evp.h>
-
-
-/*****************************************************************
-* Get Underlying Signature
-******************************************************************
- * @param algo_str, C character string representing the algorithm
- * @return ALGORITHM structure element with the properties for
- *         the specific algorithm, or NULL if not found
- */
-ALGORITHM *get_underlying_signature(char *algo_str, ALGORITHM* algos)
-{
-	uint16_t algo_idx = 0;
-
-	while (algos[algo_idx].name != NULL) {
-		if (strcmp(algos[algo_idx].name, (char *)algo_str) == 0) {
-			return &algos[algo_idx];
-		}
-		algo_idx++;
-	}
-
-	return NULL;
-}
-
-
+#include <openssl/evp.h>
 
 /*****************************************************************
 * Convert a string to upper case in place
@@ -326,15 +302,13 @@ void mtl_print_message(uint8_t* message, uint32_t message_len, FILE* stream) {
 }
 
 
-void mtl_print_signature_scheme(ALGORITHM* algo, FILE* stream) {
+void mtl_print_signature_scheme(MTL_ALGORITHM_PROPS* algo, FILE* stream) {
 	if(stream != NULL) {
 		verbose_print_block("MTL Signature Scheme", stream);
 		verbose_print_string("Scheme", algo->name, stream);
 		verbose_print_number("Security Param", algo->sec_param, stream);
-		verbose_print_number("NIST Level", algo->nist_level, stream);
 		verbose_print_hex("Randomizing", algo->randomize, stream);
-		verbose_print_hex("Robust", algo->robust, stream);
-		verbose_print_string("Underlying Sig", algo->oqs_str, stream);
+		verbose_print_string("Underlying Sig", algo->scheme_str, stream);
 		verbose_print_number("OID Length", algo->oid_len, stream);
 		verbose_print_buffer("OID Value", algo->oid, algo->oid_len, stream);
 		verbose_print_block("", stream); 	

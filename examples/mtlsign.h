@@ -1,5 +1,5 @@
 /*
-	Copyright (c) 2024, VeriSign, Inc.
+	Copyright (c) 2025, VeriSign, Inc.
 	All rights reserved.
 
 	Redistribution and use in source and binary forms, with or without
@@ -35,15 +35,16 @@
 
 #include <stdint.h>
 #include "mtl_example_util.h"
+#include "mtllib.h"
 
 /* Type definitions */
 // Quick linked list for leaf node ids
-typedef struct leaf_queue
+typedef struct handle_queue
 {
-	uint32_t leaf_id;
-	char *filename;
-	struct leaf_queue *next;
-} leaf_queue;
+	MTL_HANDLE* handle;
+	struct handle_queue *next;
+	char filename[1024];
+} handle_queue;
 
 /*****************************************************************
  * Setup a private key
