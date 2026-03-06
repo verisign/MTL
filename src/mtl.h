@@ -1,5 +1,5 @@
 /*
-	Copyright (c) 2025, VeriSign, Inc.
+	Copyright (c) 2026, VeriSign, Inc.
 	All rights reserved.
 
 	Redistribution and use in source and binary forms, with or without
@@ -38,17 +38,18 @@
 #ifndef __MTL_IMPL_H__
 #define __MTL_IMPL_H__
 
-#define MTL_LIB_VERSION "v1.1.2"
+#define MTL_LIB_VERSION "v1.2.0"
 
 #include <math.h>
 #include <openssl/evp.h>
 #include <stdint.h>
 
-#include "mtl_error.h"
 #include "mtl_node_set.h"
+#include "mtl_hash.h"
+#include "mtl_util.h"
 
-/** The default MTL Series Identifier Size (specified to 8 bytes whey using a random SEED) */ 
-#define MTL_SID_SIZE 8
+/** The default MTL Series Identifier Size */ 
+#define MTL_SID_SIZE 32
 
 // Data Structures
 /**
@@ -60,11 +61,11 @@ typedef struct AUTHPATH {
 	/** Series ID for the MTL Node Set */
 	SERIESID sid;
 	/** leaf index represented by the authentication path */
-	uint32_t leaf_index;
+	MTL_INDEX leaf_index;
 	/** Left index of the rung that was used to build the path */
-	uint32_t rung_left;
+	MTL_INDEX rung_left;
 	/** Right index of the rung that was used to build the path */
-	uint32_t rung_right;
+	MTL_INDEX rung_right;
 	/** Number of hashes in the sibiling hash path */
 	uint16_t sibling_hash_count;
 	/** pointer to the byte array for the sibiling hash path */
@@ -86,9 +87,9 @@ typedef struct RANDOMIZER {
  */
 typedef struct RUNG {
 	/** Left index of this rung */
-	uint32_t left_index;
+	MTL_INDEX left_index;
 	/** Right index of this rung */
-	uint32_t right_index;
+	MTL_INDEX right_index;
 	/** Hash value for this rung (Max Size is OpenSSL EVP_MAX_MD_SIZE - 64 bytes) */
 	uint8_t hash[EVP_MAX_MD_SIZE];
 	/** Hash length in bytes */
@@ -113,31 +114,16 @@ typedef struct LADDER {
  * \brief MTL Context
  */
 typedef struct MTL_CTX {
-	/** Seed value for the MTL Node Set */
-	SEED seed;
 	/** Series ID for the MTL Node Set */	
 	SERIESID sid;
 	/** Flag representing if randomization should be used for these nodes */
 	uint8_t randomize;
-	/** Pointer to opaque signing parameters */
-	void *sig_params;
-	/** MTL signature optional context string*/
-	void *ctx_str;
 	/** Pointer to the signature specific message hashing function */
-	 uint8_t(*hash_msg) (void *params, SERIESID * sid, uint32_t node_id,
-			     uint8_t * randomizer, uint32_t randomizer_len,
-			     uint8_t * msg_buffer, uint32_t msg_length,
-			     uint8_t * hash, uint32_t hash_length, char* ctx,
-				 uint8_t ** rmtl, uint32_t * rmtl_len);
+	H_MSG * hash_msg;
 	/** Pointer to the signature specific leaf hashing function */
-	 uint8_t(*hash_leaf) (void *params, SERIESID * sid, uint32_t node_id,
-			      uint8_t * msg_buffer, uint32_t msg_length,
-			      uint8_t * hash, uint32_t hash_length);
+	H_LEAF * hash_leaf;
 	/** Pointer to the signature specific node hashing function */
-	 uint8_t(*hash_node) (void *params, SERIESID * sid, uint32_t left_index,
-			      uint32_t right_index, uint8_t * left_hash,
-			      uint8_t * right_hash, uint8_t * hash,
-			      uint32_t hash_length);
+	H_INT * hash_int;
 	/** MTL node set structure */
 	MTLNODES nodes;
 } MTL_CTX;
@@ -146,44 +132,16 @@ typedef struct MTL_CTX {
 /**
  * Set the MTL Scheme Functions
  * @param ctx  the context for this MTL Node Set
- * @param parameters the scheme specific parameter set
  * @param randomize flag indicating if randomization of messages should be used
  * @param hash_msg the scheme specific hash_msg function
  * @param hash_leaf the scheme specific leaf hash function
  * @param hash_node the scheme specific node hash function
- * @param mtl_ctx the optional MTL context string
  * @return MTLSTATUS MTL_OK if successful
  */
-MTLSTATUS mtl_set_scheme_functions(MTL_CTX * ctx, void *parameters,
+MTLSTATUS mtl_set_scheme_functions(MTL_CTX * ctx,
 				   uint8_t randomize,
-				   uint8_t(*hash_msg) (void *parameters,
-						       SERIESID * sid,
-						       uint32_t node_id,
-						       uint8_t * randomizer,
-						       uint32_t randomizer_len,
-						       uint8_t * msg_buffer,
-						       uint32_t msg_length,
-						       uint8_t * hash,
-						       uint32_t hash_length,
-							   char* ctx,
-							   uint8_t ** rmtl,
-							   uint32_t * rmtl_len),
-				   uint8_t(*hash_leaf) (void *params,
-							SERIESID * sid,
-							uint32_t node_id,
-							uint8_t * msg_buffer,
-							uint32_t msg_length,
-							uint8_t * hash,
-							uint32_t hash_length),
-				   uint8_t(*hash_node) (void *params,
-							SERIESID * sid,
-							uint32_t left_index,
-							uint32_t right_index,
-							uint8_t * left_hash,
-							uint8_t * right_hash,
-							uint8_t * hash,
-							uint32_t hash_length),
-				   char* mtl_ctx);
+				   H_LEAF * hash_leaf,
+				   H_INT * hash_int);
 
 /**
  * Generate the message hash with randomization and then append to
@@ -191,11 +149,15 @@ MTLSTATUS mtl_set_scheme_functions(MTL_CTX * ctx, void *parameters,
  * @param ctx:         the context for this MTL Node Set
  * @param message:     byte array of message data
  * @param message_len: byte length of the message data
+ * @param ctx_str:     byte array of context string
+ * @param ctx_str_len: byte length of the context string
  * @param node_id:     return value index of the leaf node that was appended
  * @return MTL_OK on success
  */							
-MTLSTATUS mtl_hash_and_append(MTL_CTX * ctx, uint8_t * message,
-			     uint16_t message_len, uint32_t * node_id);
+MTLSTATUS mtl_hash_and_append(MTL_CTX * ctx, 
+								uint8_t * message, uint16_t message_len, 
+								uint8_t * ctx_str, uint16_t ctx_str_len,
+								MTL_INDEX * node_id);
 
 /**
  * Setup the MTL randomizer value
@@ -220,7 +182,7 @@ MTLSTATUS mtl_randomizer_free(RANDOMIZER * mtl_random);
  * @param auth:       pointer to authpath buffer
  * @return MTL_OK on success
  */
-MTLSTATUS mtl_randomizer_and_authpath(MTL_CTX * ctx, uint32_t leaf_index,
+MTLSTATUS mtl_randomizer_and_authpath(MTL_CTX * ctx, MTL_INDEX leaf_index,
 				    RANDOMIZER ** randomizer, AUTHPATH ** auth);
 
 /**
@@ -229,52 +191,47 @@ MTLSTATUS mtl_randomizer_and_authpath(MTL_CTX * ctx, uint32_t leaf_index,
  * @param ctx:  the context for this MTL Node Set
  * @param message: message to verify
  * @param message_len: length of the message in bytes
+ * @param ctx_str:     byte array of context string
+ * @param ctx_str_len: byte length of the context string
  * @param randomizer: randomizer value for this leaf node
  * @param auth_path: authenticaiton path to verify
  * @param assoc_rung: rung used to verify this auth path
  * @return MTL_OK on success
  */
-MTLSTATUS mtl_hash_and_verify(MTL_CTX * ctx, uint8_t * message,
-			    uint16_t message_len, RANDOMIZER * randomizer,
-			    AUTHPATH * auth_path, RUNG * assoc_rung);
-
-/**
- * Create buffer for ladder including address separation scheme
- * @param ctx:  the context for this MTL Node Set
- * @param ladder: ladder buffer pointer
- * @param hash_size: size of the hash in bytes
- * @param buffer: pointer to output buffer 
- * @param oid: pointer to the MTL_OID that represents the signature
- * @param oid_len: length of the oid in bytes
- * @return buffer size
- */				
-uint32_t mtl_get_scheme_separated_buffer(MTL_CTX * ctx, LADDER * ladder,
-					 uint32_t hash_size, uint8_t ** buffer, uint8_t* oid,
-					 size_t oid_len);
+MTLSTATUS mtl_hash_and_verify(MTL_CTX * ctx, 
+								uint8_t * message, uint16_t message_len, 
+								uint8_t * ctx_str, uint16_t ctx_str_len,
+								RANDOMIZER * randomizer, 
+								AUTHPATH * auth_path, 
+								RUNG * assoc_rung);
 
 // MTL Draft Specification Functions
 /**
  * Algorithm 3: Initializing a MTL Node Set.
  * mtl_initns from draft-harvey-cfrg-mtl-mode-00 Section 8.3
  * @param ctx  the context for this MTL Node Set
- * @param seed seed value for this node set (associated with public key)
  * @param sid  series identifier for this node set
- * @param ctx_str, NULL or context string to use for MTL signatures
  * @return MTLSTATUS: MTL_OK if successful
  */
-MTLSTATUS mtl_initns(MTL_CTX ** mtl_ctx, SEED *seed, SERIESID * sid, char* ctx_str);
+MTLSTATUS mtl_initns(MTL_CTX ** mtl_ctx, SERIESID * sid);
 
 /**
  * Algorithm 4: MTL Node Set Append.
  * mtl_append from draft-harvey-cfrg-mtl-mode-00 Section 8.4
- * @param ctx  the context for this MTL Node Set
- * @param data_value byte array of data_value data
- * @param data_value_len length of the data_value byte array
- * @param leaf_index index of the leaf node that is being appended
+ * @param ctx,  the context for this MTL Node Set
+ * @param data_value: byte array of data_value data
+ * @param data_value_len: length of the data_value byte array
+ * @param ctx_str: byte array of context string
+ * @param ctx_str_len: length of the ctx_str byte array
+ * @param leaf_index: index of the leaf node that is being appended
  * @return MTL_OK on success
  */
-MTLSTATUS mtl_append(MTL_CTX * ctx, uint8_t * data_value,
-		   uint16_t data_value_len, uint32_t leaf_index);
+MTLSTATUS mtl_append(MTL_CTX * ctx,
+                  uint8_t * data_value,
+                  uint16_t data_value_len, 
+                  uint8_t * ctx_str,
+                  uint16_t ctx_str_len,  
+                  MTL_INDEX leaf_index);
 
 /*****************************************************************
 * MTL Node Set Update Parent Hashes
@@ -283,7 +240,7 @@ MTLSTATUS mtl_append(MTL_CTX * ctx, uint8_t * data_value,
  * @param leaf_index: index of the leaf node that is being appended
  * @return MTL_OK on success
  */
-MTLSTATUS mtl_node_set_update_parents(MTL_CTX * ctx, uint32_t leaf_index);
+MTLSTATUS mtl_node_set_update_parents(MTL_CTX * ctx, MTL_INDEX leaf_index);
 
 /**
  * Algorithm 5: Computing an Authentication Path for a Data Value.
@@ -292,7 +249,7 @@ MTLSTATUS mtl_node_set_update_parents(MTL_CTX * ctx, uint32_t leaf_index);
  * @param leaf_index leaf node index of the data value to authenticate
  * @return auth_path authentication path from the leaf node to the associated rung, or NULL on error 
  */		   
-AUTHPATH *mtl_authpath(MTL_CTX * ctx, uint32_t leaf_index);
+AUTHPATH *mtl_authpath(MTL_CTX * ctx, MTL_INDEX leaf_index);
 
 /**
  * Algorithm 6: Computing a Merkle Tree Ladder for a Node Set.
@@ -314,17 +271,23 @@ RUNG *mtl_rung(AUTHPATH * auth_path, LADDER * ladder);
 /**
  * Algorithm 8: Verifying an Authentication Path.
  * mtl_verify from draft-harvey-cfrg-mtl-mode-00 Section 8.8
- * @param ctx  the context for this MTL Node Set  
- * @param seed value for this operation (associated with public key)
- * @param data_value byte array of data_value data
- * @param data_value_len length of the data_value byte array
- * @param auth_path (presumed) authentication path from corresponding leaf node to rung of ladder covering leaf node
- * @param assoc_rung Merkle tree rung to authenticate relative to
- * @return MTL_OK if the data value is successfully authenticated
+ * @param ctx,  the context for this MTL Node Set  
+ * @param data_value: byte array of data_value data
+ * @param data_value_len: length of the data_value byte array
+ * @param ctx_str: byte array of context string
+ * @param ctx_str_len: length of the ctx_str byte array
+ * @param randomizer: (presumed) randomizer for corresponding leaf node
+ * @param auth_path, (presumed) authentication path from corresponding
+ *     leaf node to rung of ladder covering leaf node
+ * @param assoc_rung, Merkle tree rung to authenticate relative to
+ * @return MTL_OK if path verifies correctly
  */
-MTLSTATUS mtl_verify(MTL_CTX * ctx, uint8_t * data_value,
-		   uint16_t data_value_len, AUTHPATH * auth_path,
-		   RUNG * assoc_rung);
+MTLSTATUS mtl_verify(MTL_CTX * ctx, 
+            			uint8_t * data_value, uint16_t data_value_len, 
+            			uint8_t * ctx_str, uint16_t ctx_str_len,
+            			RANDOMIZER * randomizer,
+		   				AUTHPATH * auth_path,
+						RUNG * assoc_rung);
 
 // Functions to freeing structures from MTL Draft Specification Functions
 /**
@@ -354,13 +317,12 @@ MTLSTATUS mtl_ladder_free(LADDER * ladder);
  * @param buffer      Memory buffer
  * @param buffer_size Memory buffer size
  * @param hash_size   Length of hash algorithm output in bytes
- * @param sid_len     Lenght of the Series ID in bytes
  * @param randomized  0 if not randomized, 1 if message was
  * @param auth_path   Pointer to where the auth path is created
  * @return size of the authpath buffer in bytes
  */
-uint32_t mtl_auth_path_from_buffer(char *buffer, size_t buffer_size, 
-					uint32_t hash_size, uint16_t sid_len,
+uint32_t mtl_auth_path_from_buffer(uint8_t *buffer, size_t buffer_size, 
+					uint32_t hash_size, 
 					RANDOMIZER ** randomizer, AUTHPATH ** auth_path);
 /**
  * Create memory buffer from MTL Auth Path
@@ -378,12 +340,11 @@ uint32_t mtl_auth_path_to_buffer(RANDOMIZER * randomizer, AUTHPATH * auth_path,
  * @param buffer      Pointer to the buffer to convert
  * @param buffer_size Memory buffer size
  * @param hash_size   Length of hash algorithm output in bytes
- * @param sid_len     Size of the MTL Series Id
  * @param ladder_ptr  Pointer to where the ladder is created
  * @return size of the ladder buffer in bytes
  */
-uint32_t mtl_ladder_from_buffer(char *buffer, size_t buffer_size,
-				uint32_t hash_size, uint16_t sid_len, LADDER ** ladder_ptr);
+uint32_t mtl_ladder_from_buffer(uint8_t *buffer, size_t buffer_size,
+				uint32_t hash_size, LADDER ** ladder_ptr);
 
 /**
  * Create memory buffer from MTL Ladder

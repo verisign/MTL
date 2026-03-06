@@ -1,5 +1,5 @@
 /*
-	Copyright (c) 2025, VeriSign, Inc.
+	Copyright (c) 2026, VeriSign, Inc.
 	All rights reserved.
 
 	Redistribution and use in source and binary forms, with or without
@@ -39,7 +39,35 @@
 #include "mtl_util.h"
 
 /*****************************************************************
-* Convert a 32 bit unsigned integer to bit endian bytes
+* Convert a 64 bit unsigned integer to big endian bytes
+******************************************************************
+ * @param buffer:     Byte array output
+ * @param value:      Unsigned 64 bit integer to convert
+ * @return number of bytes for output
+ */
+uint16_t uint64_to_bytes(unsigned char *buffer, uint64_t value)
+{
+	int i = 0;
+	if (buffer == NULL) {
+		LOG_ERROR("NULL Parameters");
+		return 0;
+	}
+
+	if (BIG_ENDIAN_PLATFORM) {
+		for (i = 0; i < 8; i++) {
+			buffer[i] = (unsigned char)(value >> (8*i));
+		}
+	} else {
+		for (i = 0; i < 8; i++) {
+			buffer[7-i] = (unsigned char)(value >> (8*i));
+		}
+	}
+
+	return 8;
+}
+
+/*****************************************************************
+* Convert a 32 bit unsigned integer to big endian bytes
 ******************************************************************
  * @param buffer:     Byte array output
  * @param value:      Unsigned 32 bit integer to convert
@@ -68,7 +96,7 @@ uint16_t uint32_to_bytes(unsigned char *buffer, uint32_t value)
 }
 
 /*****************************************************************
-* Convert a 16 bit unsigned integer to bit endian bytes
+* Convert a 16 bit unsigned integer to big endian bytes
 ******************************************************************
  * @param buffer:     Byte array output
  * @param value:      Unsigned 316 bit integer to convert
@@ -91,6 +119,36 @@ uint16_t uint16_to_bytes(unsigned char *buffer, uint16_t value)
 
 	return 2;
 }
+
+/*****************************************************************
+* Convert a 64 bit endian byte array to unsigned integer
+******************************************************************
+ * @param buffer:     Byte array input
+ * @param value:      Unsigned 64 bit integer result
+ * @return number of bytes for input
+ */
+uint16_t bytes_to_uint64(unsigned char *buffer, uint64_t * value)
+{
+	int i = 0;
+	if ((buffer == NULL) || (value == NULL)) {
+		LOG_ERROR("NULL Parameters");
+		return 0;
+	}
+	*value = 0;
+
+	if (BIG_ENDIAN_PLATFORM) {
+		for (i = 0; i < 8; i++) {
+			*value += buffer[i] << (8*i);
+		}
+	} else {
+		for (i = 0; i < 8; i++) {
+			*value += buffer[7-i] << (8*i);
+		}
+	}
+
+	return 8;
+}
+
 
 /*****************************************************************
 * Convert a 32 bit endian byte array to unsigned integer
@@ -146,4 +204,32 @@ uint16_t bytes_to_uint16(unsigned char *buffer, uint16_t * value)
 	}
 
 	return 2;
+}
+
+/*****************************************************************
+* Automatically use the correct type for converting MTL_INDEX
+******************************************************************/
+uint16_t mtl_index_to_bytes(unsigned char *buffer, MTL_INDEX value) 
+{
+	switch (sizeof(MTL_INDEX)) {
+		case 4:
+			return uint32_to_bytes(buffer, (uint32_t)value);
+		case 8:
+			return uint64_to_bytes(buffer, (uint64_t)value);
+		default:
+			return 0;
+	}
+	return 0;
+}
+
+uint16_t bytes_to_mtl_index(unsigned char *buffer, MTL_INDEX * value) {
+	switch (sizeof(MTL_INDEX)) {
+		case 4:
+			return bytes_to_uint32(buffer, (uint32_t *)value);
+		case 8:
+			return bytes_to_uint64(buffer, (uint64_t *)value);
+		default:
+			return 0;
+	}
+	return 0;
 }

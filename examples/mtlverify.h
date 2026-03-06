@@ -1,5 +1,5 @@
 /*
-	Copyright (c) 2025, VeriSign, Inc.
+	Copyright (c) 2026, VeriSign, Inc.
 	All rights reserved.
 
 	Redistribution and use in source and binary forms, with or without
@@ -35,27 +35,9 @@
 
 #include <stdbool.h>
 #include "mtllib.h"
-#include "mtl.h"
 
 /* Type definitions */
 
 /* Function Prototypes*/
-
-
-/*****************************************************************
- * Verify the authentication path given a good ladder
- ******************************************************************
- * @param ctx            An initialized MTL context
- * @param auth_path      Authentication path to verify
- * @param ladder         Ladder to use to verify the auth_path
- * @param msg            Message to verify wtih the auth path
- * @param msg_len        Length of the message to verify
- * @param mtl_rand       Randomizer value to use for validation
- * @param verbose_buffer File pointer (or null) for the verbose output
- * @return 0 on success or int value for error
- */
-MTLSTATUS verify_auth_path(MTL_CTX * ctx, AUTHPATH *auth_path, LADDER* ladder,
-                         uint8_t* msg, size_t msg_len, RANDOMIZER *mtl_rand,
-						 FILE* verbose_buffer);
 
 #endif //__MTL_VERIFY_TOOL_H__

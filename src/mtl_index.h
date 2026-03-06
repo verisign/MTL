@@ -1,5 +1,5 @@
 /*
-	Copyright (c) 2024, VeriSign, Inc.
+	Copyright (c) 2026, VeriSign, Inc.
 	All rights reserved.
 
 	Redistribution and use in source and binary forms, with or without
@@ -30,23 +30,43 @@
 	ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 	POSSIBILITY OF SUCH DAMAGE.
 */
-#ifndef __MTL_TOOL_IO_H__
-#define __MTL_TOOL_IO_H__
+/**
+ *  \file mtl_error.h
+ *  \brief MTL macro functions that can report macros or disable error reporting.
+*/
+#ifndef __MTL_INDEX_H__
+#define __MTL_INDEX_H__
 
-#include "mtl.h"
+#include <stddef.h>
+#include <stdint.h>
 
-uint8_t write_key_file(char *keyfilename, uint8_t * sk, uint32_t sk_len,
-		       uint8_t * pk, uint32_t pk_len, char *keystr,
-		       uint16_t randomize, MTL_CTX * mtl_ctx);
-uint8_t read_key_file(char *keyfilename, uint8_t ** sk, uint32_t * sk_len,
-		      uint8_t ** pk, uint32_t * pk_len, char **keystr,
-		      uint16_t * randomize, MTL_CTX ** mtl_ctx);
-uint8_t load_private_key(char *keyfilename, uint8_t ** sk, uint32_t * sk_len,
-			 uint8_t ** pk, uint32_t * pk_len, char **keystr,
-			 uint16_t * randomize, MTL_CTX ** mtl_ctx,
-			 void **params, uint8_t * algo_type);
-uint8_t load_public_key(char *keyfilename, uint8_t ** pk, uint32_t * pk_len,
-			char **keystr, uint16_t * randomize, MTL_CTX ** mtl_ctx,
-			void **params, uint8_t * algo_type);
+// Change this to switch between 32bit and 64bit MTL
+#define MTL_INDEX_LEN 8
 
-#endif				// __MTL_TOOL_IO_H__
+/** The size of a leaf index */
+#if MTL_INDEX_LEN == 4
+	typedef uint32_t MTL_INDEX;
+#elif MTL_INDEX_LEN == 8
+	typedef uint64_t MTL_INDEX;
+#else
+	#error "Unsupported MTL_INDEX size"
+#endif
+
+/** Maximum leaf index supported by a single set
+ * 
+ */
+#if MTL_INDEX_LEN == 4
+	#define MTL_NODE_SET_MAX_LEAF 0x7fffffffU
+#elif MTL_INDEX_LEN == 8
+	#define MTL_NODE_SET_MAX_LEAF 0x7fffffffffffffffULL
+#else
+	#error "Unsupported MTL_INDEX size"
+#endif
+
+
+/** Maximum index supported by an node set
+ * 
+ */
+#define MTL_NODE_SET_MAX_INDEX (2*MTL_NODE_SET_MAX_LEAF)
+
+#endif				// __MTL_INDEX_H

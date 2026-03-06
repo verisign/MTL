@@ -1,5 +1,5 @@
 /*
-    Copyright (c) 2025, VeriSign, Inc.
+    Copyright (c) 2026, VeriSign, Inc.
     All rights reserved.
 
     Redistribution and use in source and binary forms, with or without
@@ -65,8 +65,6 @@ MTLLIB_STATUS mtllib_key_write_algorithms(FILE *fp);
  * @param sk_len      Length of the secret key byte array
  * @param pk          Byte array containin the public key
  * @param pk_len      Length of the public key byte array
- * @param mtl_ctx_str Null or context string to use
- * @param seed        Seed value for MTL series (NULL for new keys)
  * @param sid         Series ID value for MTL series (NULL for new keys)
  * @return MTLLIB_STATUS MTLLIB_OK on success
  */
@@ -76,8 +74,6 @@ MTLLIB_STATUS mtllib_util_setup_sig_scheme(MTL_CRYPTO_LIBRARY lib,
                                            size_t sk_len,
                                            uint8_t *pk,
                                            size_t pk_len,
-                                           char *mtl_ctx_str,
-                                           SEED *seed,
                                            SERIESID *sid);
 
 /**

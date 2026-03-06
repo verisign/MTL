@@ -1,5 +1,5 @@
 /*
-	Copyright (c) 2025, VeriSign, Inc.
+	Copyright (c) 2026, VeriSign, Inc.
 	All rights reserved.
 
 	Redistribution and use in source and binary forms, with or without
@@ -42,9 +42,7 @@
     func();                                               \
     printf(" Success\n");
 
-// SPX Test Module Functions
-uint8_t mtltest_spx_funcs(void);
-uint8_t mtltest_spx(void);
+uint8_t mtltest_mtl_hash(void);
 uint8_t mtltest_mtl_node_set(void);
 uint8_t mtltest_mtl(void);
 uint8_t mtltest_util(void);
