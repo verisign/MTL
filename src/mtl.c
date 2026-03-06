@@ -1,5 +1,5 @@
 /*
-	Copyright (c) 2025, VeriSign, Inc.
+	Copyright (c) 2026, VeriSign, Inc.
 	All rights reserved.
 
 	Redistribution and use in source and binary forms, with or without
@@ -34,78 +34,36 @@
 
 #include "mtl.h"
 #include "mtl_node_set.h"
-#include "mtl_spx.h"
+#include "mtl_error.h"
 
 /*****************************************************************
  * Set the MTL Scheme Functions
 ******************************************************************
  * @param ctx,  the context for this MTL Node Set
- * @param parameters, the scheme specific parameter set
  * @param randomize, flag indicating if randomization of messages
  *                   should be used
  * @param hash_msg, the scheme specific hash_msg function
  * @param hash_leaf, the scheme specific leaf hash function
  * @param hash_node, the scheme specific node hash function
- * @param mtl_ctx,   the optional MTL context string
  * @return MTLSTATUS: MTL_OK if successful
  */
-MTLSTATUS mtl_set_scheme_functions(MTL_CTX * ctx, void *parameters,
+MTLSTATUS mtl_set_scheme_functions(MTL_CTX * ctx,
 				   uint8_t randomize,
-				   uint8_t(*hash_msg) (void *parameters,
-						       SERIESID * sid,
-						       uint32_t node_id,
-						       uint8_t * randomizer,
-						       uint32_t randomizer_len,
-						       uint8_t * msg_buffer,
-						       uint32_t msg_length,
-						       uint8_t * hash,
-						       uint32_t hash_length,
-							   char* ctx,
-							   uint8_t ** rmtl,
-							   uint32_t * rmtl_len),
-				   uint8_t(*hash_leaf) (void *params,
-							SERIESID * sid,
-							uint32_t node_id,
-							uint8_t * msg_buffer,
-							uint32_t msg_length,
-							uint8_t * hash,
-							uint32_t hash_length),
-				   uint8_t(*hash_node) (void *params,
-							SERIESID * sid,
-							uint32_t left_index,
-							uint32_t right_index,
-							uint8_t * left_hash,
-							uint8_t * right_hash,
-							uint8_t * hash,
-							uint32_t hash_length),
-				   char* mtl_ctx)
+				   H_LEAF * hash_leaf,
+				   H_INT * hash_int)
 {
-	size_t ctx_str_len = 0;
 
 	if (ctx == NULL) {
-		return MTL_RESOURCE_FAIL;
+		return MTL_NULL_PTR;
+	}
+	if (randomize != 1) {
+		LOG_ERROR("Pseudorandom sampling is not currently supported");
+		return MTL_BAD_PARAM;
 	}
 
 	ctx->randomize = randomize;
-	ctx->sig_params = parameters;
-	ctx->hash_msg = hash_msg;
 	ctx->hash_leaf = hash_leaf;
-	ctx->hash_node = hash_node;
-	ctx->ctx_str = NULL;
-	if(mtl_ctx != NULL) {
-		ctx_str_len = strlen(mtl_ctx);
-		if (ctx_str_len > 255) // draft-harvey-cfrg-mtl-mode-00 §4.1: ctx is at most 255 octets long
-		{
-			LOG_ERROR("Context string must be no longer than 255 bytes");
-			return MTL_RESOURCE_FAIL;
-		}
-		ctx->ctx_str = calloc(1, ctx_str_len+1);
-		if (ctx->ctx_str == NULL)
-		{
-			return MTL_RESOURCE_FAIL;
-		}
-		strncpy(ctx->ctx_str, mtl_ctx,ctx_str_len);
-	}
+	ctx->hash_int = hash_int;
 
 	return MTL_OK;
 }
@@ -120,35 +78,25 @@ MTLSTATUS mtl_set_scheme_functions(MTL_CTX * ctx, void *parameters,
  * mtl_initns from draft-harvey-cfrg-mtl-mode-00 Section 8.3
 ******************************************************************
  * @param ctx,  the context for this MTL Node Set
- * @param seed, seed value for this node set (associated with public key)
  * @param sid,  series identifier for this node set
- * @param ctx_str, NULL or context string to use for MTL signatures
  * @return MTLSTATUS: MTL_OK if successful
  */
-MTLSTATUS mtl_initns(MTL_CTX ** mtl_ctx, SEED *seed, SERIESID * sid, char* ctx_str)
+MTLSTATUS mtl_initns(MTL_CTX ** mtl_ctx, SERIESID * sid)
 {
-	size_t ctx_str_len = 0;
-
 	if ((mtl_ctx == NULL) || (sid == NULL)) {
-		return MTL_RESOURCE_FAIL;
+		return MTL_NULL_PTR;
 	}
 	MTL_CTX *ctx = malloc(sizeof(MTL_CTX));
-
-	memcpy(&ctx->seed, seed, sizeof(SEED));
-	memcpy(&ctx->sid, sid, sizeof(SERIESID));
-	ctx->randomize = 0;
-	ctx->sig_params = NULL;
-	ctx->hash_msg = NULL;
-	ctx->hash_leaf = NULL;
-	ctx->hash_node = NULL;
-	ctx->ctx_str = NULL;
-	if(ctx_str != NULL) {
-		ctx_str_len = strlen(ctx_str);
-		ctx->ctx_str = calloc(1, ctx_str_len+1);
-		strncpy(ctx->ctx_str, ctx_str, ctx_str_len);
+	if (ctx == NULL) {
+		return MTL_RESOURCE_FAIL;
 	}
 
-	mtl_node_set_init(&ctx->nodes, seed, sid);
+	memcpy(&ctx->sid, sid, sizeof(SERIESID));
+	ctx->randomize = 0;
+	ctx->hash_msg = NULL;
+	ctx->hash_leaf = NULL;
+	ctx->hash_int = NULL;
+	mtl_node_set_init(&ctx->nodes, sid);
 
 	*mtl_ctx = ctx;
 
@@ -162,12 +110,17 @@ MTLSTATUS mtl_initns(MTL_CTX ** mtl_ctx, SEED *seed, SERIESID * sid, char* ctx_s
  * @param ctx,  the context for this MTL Node Set
  * @param data_value: byte array of data_value data
  * @param data_value_len: length of the data_value byte array
+ * @param ctx_str: byte array of context string
+ * @param ctx_str_len: length of the ctx_str byte array
  * @param leaf_index: index of the leaf node that is being appended
  * @return MTL_OK on success
  */
 MTLSTATUS mtl_append(MTL_CTX * ctx,
 		   uint8_t * data_value,
-		   uint16_t data_value_len, uint32_t leaf_index)
+		   uint16_t data_value_len,
+		   uint8_t * ctx_str,
+		   uint16_t ctx_str_len,
+		   MTL_INDEX leaf_index)
 {
 	uint8_t hash[EVP_MAX_MD_SIZE];
 
@@ -176,16 +129,27 @@ MTLSTATUS mtl_append(MTL_CTX * ctx,
 		return MTL_NULL_PTR;
 	}
 
+	// Generate new randomizer
+	RANDOMIZER * mtl_random = NULL;
+	if (mtl_generate_randomizer(ctx, &mtl_random) != MTL_OK) {
+		LOG_ERROR("Unable to generate node randomizer");
+		return MTL_ERROR;
+	}
+
 	// Compute and store the leaf node hash value 
 	if (ctx->hash_leaf != NULL) {
-		if (ctx->hash_leaf(ctx->sig_params, &ctx->sid, leaf_index,
-				   data_value, data_value_len, &hash[0],
-				   ctx->nodes.hash_size) != MTL_OK) {
+		if (ctx->hash_leaf(&ctx->sid, leaf_index,
+				   data_value, data_value_len, 
+				   ctx_str, ctx_str_len,
+				   mtl_random->value, mtl_random->length, 
+				   &hash[0], ctx->nodes.hash_size) != MTL_OK) {
 			LOG_ERROR("Unable to hash leaf node");
+			mtl_randomizer_free(mtl_random);
 			return MTL_ERROR;
 		}
 	} else {
 		LOG_ERROR("Leaf hash function is not defined");
+		mtl_randomizer_free(mtl_random);
 		return MTL_ERROR;
 	}
 
@@ -193,8 +157,17 @@ MTLSTATUS mtl_append(MTL_CTX * ctx,
 	if (mtl_node_set_insert(&ctx->nodes, leaf_index, leaf_index, &hash[0])
 	    != MTL_OK) {
 		LOG_ERROR("Unable to add message to node set");
+		mtl_randomizer_free(mtl_random);
 		return MTL_ERROR;
 	}
+
+	if (mtl_node_set_insert_randomizer(&ctx->nodes, leaf_index, mtl_random->value)
+	    != MTL_OK) {
+		LOG_ERROR("Unable to add randomizer to node set");
+		mtl_randomizer_free(mtl_random);
+		return MTL_ERROR;
+	}
+	mtl_randomizer_free(mtl_random);
 
 	if (mtl_node_set_update_parents(ctx, leaf_index) != MTL_OK) {
 		LOG_ERROR("Unable to add message to node set");
@@ -211,14 +184,14 @@ MTLSTATUS mtl_append(MTL_CTX * ctx,
  * @param leaf_index: index of the leaf node that is being appended
  * @return MTL_OK on success
  */
-MTLSTATUS mtl_node_set_update_parents(MTL_CTX * ctx, uint32_t leaf_index)
+MTLSTATUS mtl_node_set_update_parents(MTL_CTX * ctx, MTL_INDEX leaf_index)
 {
-	uint32_t index;
+	MTL_INDEX index;
 	uint8_t *hash_left;
 	uint8_t *hash_right;
 	uint8_t hash[EVP_MAX_MD_SIZE];
-	uint32_t left_index;
-	uint32_t mid_index;	
+	MTL_INDEX left_index;
+	MTL_INDEX mid_index;	
 	MTLSTATUS return_code;	
 
 	if (ctx == NULL) {
@@ -236,12 +209,11 @@ MTLSTATUS mtl_node_set_update_parents(MTL_CTX * ctx, uint32_t leaf_index)
 		    &&
 		    (mtl_node_set_fetch
 		     (&ctx->nodes, mid_index, leaf_index, &hash_right) == MTL_OK)) {
-			if (ctx->hash_node != NULL) {
-				if (ctx->hash_node(ctx->sig_params, &ctx->sid,
+			if (ctx->hash_int != NULL) {
+				if (ctx->hash_int(&ctx->sid,
 						   left_index, leaf_index,
 						   hash_left, hash_right,
-						   &hash[0],
-						   ctx->nodes.hash_size) != MTL_OK) {
+						   &hash[0], ctx->nodes.hash_size) != MTL_OK) {
 					free(hash_left);
 					free(hash_right);
 					LOG_ERROR("Unable to hash the node");
@@ -279,13 +251,13 @@ MTLSTATUS mtl_node_set_update_parents(MTL_CTX * ctx, uint32_t leaf_index)
  * @return auth_path: authentication path from the leaf node to the
  *                    associated rung, NULL on error
  */
-AUTHPATH *mtl_authpath(MTL_CTX * ctx, uint32_t leaf_index)
+AUTHPATH *mtl_authpath(MTL_CTX * ctx, MTL_INDEX leaf_index)
 {
 	int64_t index = 0;
-	uint32_t left = 0;
-	uint32_t right = 0;
-	uint32_t pathl = 0;
-	uint32_t pathr = 0;
+	MTL_INDEX left = 0;
+	MTL_INDEX right = 0;
+	MTL_INDEX pathl = 0;
+	MTL_INDEX pathr = 0;
 	uint8_t *hash;
 	AUTHPATH *auth_path = calloc(1, sizeof(AUTHPATH));
 
@@ -337,7 +309,7 @@ AUTHPATH *mtl_authpath(MTL_CTX * ctx, uint32_t leaf_index)
 			       (index * ctx->nodes.hash_size), hash,
 			       ctx->nodes.hash_size);
 		} else {
-			LOG_ERROR("Auth Path extends past hash count\n");
+			LOG_ERROR("Auth Path extends past hash count");
 		}
 
 		free(hash);
@@ -355,18 +327,33 @@ AUTHPATH *mtl_authpath(MTL_CTX * ctx, uint32_t leaf_index)
  */
 LADDER *mtl_ladder(MTL_CTX * ctx)
 {
-	uint32_t left_index = 0;
-	uint32_t right_index = 0;
+	MTL_INDEX left_index = 0;
+	MTL_INDEX right_index = 0;
 	int64_t i;
 	RUNG *rung;
-	LADDER *ladder = malloc(sizeof(LADDER));
+	LADDER *ladder = NULL;
 	uint8_t *hash_ptr;
 	uint16_t node_index = 0;
 
+	if (ctx == NULL) {
+		LOG_ERROR("Unable to allocate ladder");
+		return NULL;
+	}
+
+	ladder = calloc(1, sizeof(LADDER));
+	if (ladder == NULL) {
+		LOG_ERROR("Unable to allocate ladder");
+		return NULL;	
+	}
 	ladder->flags = 0;
 	memcpy(&ladder->sid, &ctx->sid, sizeof(SERIESID));
 	ladder->rung_count = mtl_bit_width(ctx->nodes.leaf_count);
 	ladder->rungs = malloc(sizeof(RUNG) * ladder->rung_count);
+	if (ladder->rungs == NULL) {
+		LOG_ERROR("Unable to allocate rungs");
+		free(ladder);
+		return NULL;
+	}
 
 	// Concatenate the rungs in the node set
 	for (i = mtl_msb(ctx->nodes.leaf_count); i >= 0; i--) {
@@ -381,8 +368,14 @@ LADDER *mtl_ladder(MTL_CTX * ctx)
 			rung->left_index = left_index;
 			rung->right_index = right_index;
 			rung->hash_length = ctx->nodes.hash_size;
-			mtl_node_set_fetch(&ctx->nodes, left_index, right_index,
-					   &hash_ptr);
+			if (mtl_node_set_fetch(&ctx->nodes, left_index, right_index,
+					   &hash_ptr) != MTL_OK) {
+						LOG_ERROR("Error building ladder");
+						free(ladder->rungs);
+						free(ladder);
+						free(hash_ptr);
+						return NULL;
+					   }
 			memcpy(rung->hash, hash_ptr, ctx->nodes.hash_size);
 			free(hash_ptr);
 			left_index = right_index + 1;
@@ -403,10 +396,10 @@ LADDER *mtl_ladder(MTL_CTX * ctx)
  */
 RUNG *mtl_rung(AUTHPATH * auth_path, LADDER * ladder)
 {
-	uint32_t leaf_index = 0;
+	MTL_INDEX leaf_index = 0;
 	uint32_t sibling_hash_count = 0;
-	uint32_t left_index;
-	uint32_t right_index;
+	MTL_INDEX left_index;
+	MTL_INDEX right_index;
 	uint32_t i;
 	RUNG *assoc_rung = NULL;
 	RUNG *rung = NULL;
@@ -470,29 +463,37 @@ RUNG *mtl_rung(AUTHPATH * auth_path, LADDER * ladder)
  * mtl_verify from draft-harvey-cfrg-mtl-mode-00 Section 8.8
  ****************************************************************** 
  * @param ctx,  the context for this MTL Node Set  
- * @param seed value for this operation (associated with public key)
  * @param data_value: byte array of data_value data
  * @param data_value_len: length of the data_value byte array
+ * @param ctx_str: byte array of context string
+ * @param ctx_str_len: length of the ctx_str byte array
+ * @param randomizer: (presumed) randomizer for corresponding leaf node
  * @param auth_path, (presumed) authentication path from corresponding
  *     leaf node to rung of ladder covering leaf node
  * @param assoc_rung, Merkle tree rung to authenticate relative to
  * @return MTL_OK if path verifies correctly
  */
-MTLSTATUS mtl_verify(MTL_CTX * ctx, uint8_t * data_value,
-		   uint16_t data_value_len, AUTHPATH * auth_path,
-		   RUNG * assoc_rung)
+MTLSTATUS mtl_verify(MTL_CTX * ctx, 
+                  uint8_t * data_value,
+                  uint16_t data_value_len, 
+                  uint8_t * ctx_str,
+                  uint16_t ctx_str_len,
+                  RANDOMIZER * randomizer,
+				  AUTHPATH * auth_path, RUNG * assoc_rung)
 {
 	MTLSTATUS result;
-	uint8_t target_hash[EVP_MAX_MD_SIZE];
-	uint32_t leaf_index = 0;
+	uint8_t output_hash[EVP_MAX_MD_SIZE];
+	uint8_t input_hash[EVP_MAX_MD_SIZE];
+	MTL_INDEX leaf_index = 0;
 	uint32_t sibling_hash_count = 0;
 	uint32_t i;
-	uint32_t left_index;
-	uint32_t right_index;
-	uint32_t mid_index;
+	MTL_INDEX left_index;
+	MTL_INDEX right_index;
+	MTL_INDEX mid_index;
 	uint8_t *sibling_hash;
 
 	if ((ctx == NULL) || (data_value == NULL) || (data_value_len == 0)
+		|| (randomizer == NULL) || (randomizer->length == 0)
 	    || (auth_path == NULL)
 	    || (assoc_rung == NULL)) {
 		return MTL_NULL_PTR;
@@ -503,9 +504,11 @@ MTLSTATUS mtl_verify(MTL_CTX * ctx, uint8_t * data_value,
 	// Recompute leaf node hash value
 	if (ctx->hash_leaf != NULL) {
 		result =
-		    ctx->hash_leaf(ctx->sig_params, &auth_path->sid, leaf_index,
+		    ctx->hash_leaf(&auth_path->sid, leaf_index,
 				   data_value, data_value_len,
-				   &target_hash[0], assoc_rung->hash_length);
+				   ctx_str, ctx_str_len,
+				   randomizer->value, randomizer->length, 
+				   &output_hash[0], assoc_rung->hash_length);
 	} else {
 		LOG_ERROR("Leaf hash function is not defined");
 		return MTL_ERROR;
@@ -519,7 +522,7 @@ MTLSTATUS mtl_verify(MTL_CTX * ctx, uint8_t * data_value,
 	//     index pairs match
 	if ((leaf_index == assoc_rung->left_index) &&
 	    (leaf_index == assoc_rung->right_index)) {
-		return memcmp(target_hash, assoc_rung->hash,
+		return memcmp(output_hash, assoc_rung->hash,
 			      assoc_rung->hash_length);
 	}
 	// Recompute internal node hash values and compare to associated
@@ -532,13 +535,13 @@ MTLSTATUS mtl_verify(MTL_CTX * ctx, uint8_t * data_value,
 		sibling_hash =
 		    auth_path->sibling_hash +
 		    ((i - 1) * assoc_rung->hash_length);
+		memcpy(input_hash, output_hash, assoc_rung->hash_length);
 		if (leaf_index < mid_index) {
-			if (ctx->hash_node != NULL) {
+			if (ctx->hash_int != NULL) {
 				result =
-				    ctx->hash_node(ctx->sig_params,
-						   &auth_path->sid, left_index,
-						   right_index, target_hash,
-						   sibling_hash, target_hash,
+				    ctx->hash_int(&auth_path->sid, left_index,
+						   right_index, input_hash,
+						   sibling_hash, output_hash,
 						   assoc_rung->hash_length);
 			} else {
 				LOG_ERROR
@@ -546,12 +549,11 @@ MTLSTATUS mtl_verify(MTL_CTX * ctx, uint8_t * data_value,
 					return MTL_ERROR;
 			}
 		} else {
-			if (ctx->hash_node != NULL) {
+			if (ctx->hash_int != NULL) {
 				result =
-				    ctx->hash_node(ctx->sig_params,
-						   &auth_path->sid, left_index,
+				    ctx->hash_int(&auth_path->sid, left_index,
 						   right_index, sibling_hash,
-						   target_hash, target_hash,
+						   input_hash, output_hash,
 						   assoc_rung->hash_length);
 			} else {
 				LOG_ERROR
@@ -563,7 +565,7 @@ MTLSTATUS mtl_verify(MTL_CTX * ctx, uint8_t * data_value,
 		// Break if associated rung reached
 		if ((left_index == assoc_rung->left_index) &&
 		    (right_index == assoc_rung->right_index)) {
-			if( memcmp(target_hash, assoc_rung->hash,
+			if( memcmp(output_hash, assoc_rung->hash,
 				      assoc_rung->hash_length) == 0 ) {
 						return MTL_OK;
 					  }
@@ -574,7 +576,7 @@ MTLSTATUS mtl_verify(MTL_CTX * ctx, uint8_t * data_value,
 		}
 	}
 
-	LOG_ERROR("Associated rung not on index's path")
+	LOG_ERROR("Associated rung not on index's path");
 	return MTL_BOGUS;
 }
 
@@ -592,7 +594,6 @@ MTLSTATUS mtl_verify(MTL_CTX * ctx, uint8_t * data_value,
 MTLSTATUS mtl_free(MTL_CTX * ctx)
 {
 	mtl_node_set_free(&ctx->nodes);
-	free(ctx->ctx_str);
 	free(ctx);
 	ctx = NULL;
 
@@ -608,7 +609,9 @@ MTLSTATUS mtl_free(MTL_CTX * ctx)
 MTLSTATUS mtl_authpath_free(AUTHPATH * path)
 {
 
-	free(path->sibling_hash);
+	if(path != NULL) {
+		free(path->sibling_hash);
+	}
 	free(path);
 	path = NULL;
 
@@ -623,7 +626,9 @@ MTLSTATUS mtl_authpath_free(AUTHPATH * path)
  */
 MTLSTATUS mtl_ladder_free(LADDER * ladder)
 {
-	free(ladder->rungs);
+	if (ladder != NULL) {
+		free(ladder->rungs);
+	}
 	free(ladder);
 	ladder = NULL;
 

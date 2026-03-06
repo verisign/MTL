@@ -1,5 +1,5 @@
 /*
-	Copyright (c) 2025, VeriSign, Inc.
+	Copyright (c) 2026, VeriSign, Inc.
 	All rights reserved.
 
 	Redistribution and use in source and binary forms, with or without
@@ -30,22 +30,21 @@
 	ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 	POSSIBILITY OF SUCH DAMAGE.
 */
-#include <config.h>
 #include <stdio.h>
 #include <assert.h>
 #include <string.h>
 
 #include "mtltest.h"
 #include "mtllib.h"
-#include "mtltest_full_signature.h"
-#include "mtltest_signed_ladder.h"
+#include "mtltest_test_vectors.h"
 
 // Prototypes for testing functions
 uint8_t mtltest_mtllib_key_new(void);
 uint8_t mtltest_mtllib_key_new_null(void);
-uint8_t mtltest_mtllib_key_get_pubkey_bytes(void);
-uint8_t mtltest_mtllib_key_pubkey_from_params(void);
-uint8_t mtltest_mtllib_key_pubkey_from_params_null(void);
+uint8_t mtltest_mtllib_pubkey_to_buffer(void);
+uint8_t mtltest_mtllib_pubkey_to_buffer_null(void);
+uint8_t mtltest_mtllib_pubkey_from_buffer(void);
+uint8_t mtltest_mtllib_pubkey_from_buffer_null(void);
 uint8_t mtltest_mtllib_key_from_buffer(void);
 uint8_t mtltest_mtllib_key_from_buffer_null(void);
 uint8_t mtltest_mtllib_key_to_buffer(void);
@@ -64,12 +63,12 @@ uint8_t mtltest_mtllib_verify_condensed(void);
 uint8_t mtltest_mtllib_verify_condensed_no_ladder(void);
 uint8_t mtltest_mtllib_verify_full(void);
 uint8_t mtltest_mtllib_verify_null(void);
+uint8_t mtltest_mtllib_verify_unparseable(void);
 
 uint8_t mtltest_mtllib_verify_signed_ladder(void);
 uint8_t mtltest_mtllib_verify_signed_ladder_no_sig(void);
 uint8_t mtltest_mtllib_verify_signed_ladder_corrupt(void);
 uint8_t mtltest_mtllib_verify_signed_ladder_null(void);
-
 
 
 uint8_t mtltest_mtllib(void)
@@ -80,11 +79,13 @@ uint8_t mtltest_mtllib(void)
 			 "Verify MTL library key generation function");
 	RUN_TEST(mtltest_mtllib_key_new_null,
 			 "Verify MTL library key generation function with NULL parameters");
-	RUN_TEST(mtltest_mtllib_key_get_pubkey_bytes,
+	RUN_TEST(mtltest_mtllib_pubkey_to_buffer,
 			 "Verify MTL library get public key from a key set");
-	RUN_TEST(mtltest_mtllib_key_pubkey_from_params,
-			 "Verify MTL library get public key from a parameter set");
-	RUN_TEST(mtltest_mtllib_key_pubkey_from_params_null,
+	RUN_TEST(mtltest_mtllib_pubkey_to_buffer_null,
+			 "Verify MTL library get public key from a key set");
+	RUN_TEST(mtltest_mtllib_pubkey_from_buffer,
+			 "Verify MTL library get public key function with NULL parameters");
+	RUN_TEST(mtltest_mtllib_pubkey_from_buffer_null,
 			 "Verify MTL library get public key from a parameter set with NULL parameters");
 	RUN_TEST(mtltest_mtllib_key_from_buffer,
 			 "Verify MTL library get a key from a byte buffer");
@@ -120,6 +121,8 @@ uint8_t mtltest_mtllib(void)
 			 "Verify MTL library verify a full signature");
 	RUN_TEST(mtltest_mtllib_verify_null,
 			 "Verify MTL library verify a signature with NULL parameters");
+	RUN_TEST(mtltest_mtllib_verify_unparseable,
+			 "Verify MTL library verify a signature with unparseable parameters");
 	RUN_TEST(mtltest_mtllib_verify_signed_ladder,
 			 "Verify MTL library verify a signed ladder");
 	RUN_TEST(mtltest_mtllib_verify_signed_ladder_no_sig,
@@ -142,38 +145,19 @@ uint8_t mtltest_mtllib_key_new(void)
 	size_t algo = 0;
 	MTLLIB_CTX *ctx = NULL;
 
-	// Test creating key with no context string
+	// Test creating key
 	algo = 0;
 	while (sig_algos[algo].name != NULL)
 	{
 		ctx = NULL;
-		assert(mtllib_key_new(sig_algos[algo].name, &ctx, NULL) == MTLLIB_OK);
+		assert(mtllib_key_new(sig_algos[algo].name, &ctx) == MTLLIB_OK);
 		assert(ctx->algo_params == &sig_algos[algo]);
 		assert(ctx->signature != NULL);
 		assert(ctx->secret_key != NULL);
-		assert(ctx->secret_key_len >= 64);
+		assert(ctx->secret_key_len > 0);
 		assert(ctx->public_key != NULL);
-		assert(ctx->public_key_len >= 32);
+		assert(ctx->public_key_len > 0);
 		assert(ctx->mtl != NULL);
-		assert(ctx->mtl->ctx_str == NULL);
-		mtllib_key_free(ctx);
-		algo++;
-	}
-
-	// Test creating key with context string
-	algo = 0;
-	while (sig_algos[algo].name != NULL)
-	{
-		ctx = NULL;
-		assert(mtllib_key_new(sig_algos[algo].name, &ctx, "MTLLIB_Test_CTX") == MTLLIB_OK);
-		assert(ctx->algo_params == &sig_algos[algo]);
-		assert(ctx->signature != NULL);
-		assert(ctx->secret_key != NULL);
-		assert(ctx->secret_key_len >= 64);
-		assert(ctx->public_key != NULL);
-		assert(ctx->public_key_len >= 32);
-		assert(ctx->mtl != NULL);
-		assert(strcmp(ctx->mtl->ctx_str, "MTLLIB_Test_CTX") == 0);
 		mtllib_key_free(ctx);
 		algo++;
 	}
@@ -188,58 +172,140 @@ uint8_t mtltest_mtllib_key_new_null(void)
 {
 	MTLLIB_CTX *ctx = NULL;
 
-	assert(mtllib_key_new(NULL, &ctx, NULL) == MTLLIB_NULL_PARAMS);
-	assert(mtllib_key_new("SLH-DSA-MTL-SHA2-128S", NULL, NULL) == MTLLIB_NULL_PARAMS);
+	assert(mtllib_key_new(NULL, &ctx) == MTLLIB_NULL_PARAMS);
+	assert(mtllib_key_new(MTL_TEST_VECTOR_SCHEME_NAME, NULL) == MTLLIB_NULL_PARAMS);
 
 	return 0;
 }
 
-uint8_t mtltest_mtllib_key_get_pubkey_bytes(void)
+uint8_t mtltest_mtllib_pubkey_to_buffer(void)
 {
 	MTLLIB_CTX *ctx = NULL;
-	uint8_t *public_key = NULL;
+	MTLLIB_BUFFER *public_key = NULL;
+	size_t key_len = 0;
 
-	assert(mtllib_key_new("SLH-DSA-MTL-SHA2-128S", &ctx, NULL) == MTLLIB_OK);
-	assert(mtllib_key_get_pubkey_bytes(ctx, &public_key) == 32);
-	assert(public_key == ctx->public_key);
+	assert(mtllib_key_new(MTL_TEST_VECTOR_SCHEME_NAME, &ctx) == MTLLIB_OK);
+	key_len = mtllib_pubkey_to_buffer_length(ctx);
+	assert(key_len == MTL_TEST_VECTOR_SCHEME_PK_LEN);
+	assert(mtllib_buffer_initialize(&public_key, key_len, NULL) == MTLLIB_OK);
+	assert(public_key->buffer_length == key_len);
+	assert(public_key->buffer_position == 0);
+	assert(mtllib_pubkey_to_buffer(ctx, public_key) == MTLLIB_OK);
+	assert(public_key->buffer_length == key_len);
+	assert(public_key->buffer_position == key_len);
+	assert(memcmp(public_key->buffer_data, ctx->public_key, key_len) == 0);
+	mtllib_key_free(ctx);
+	mtllib_buffer_free(public_key);
+
+	return 0;
+}
+
+uint8_t mtltest_mtllib_pubkey_to_buffer_null(void)
+{
+	MTLLIB_CTX *ctx = NULL;
+	MTLLIB_BUFFER *public_key = NULL;
+
+	assert(mtllib_key_new(MTL_TEST_VECTOR_SCHEME_NAME, &ctx) == MTLLIB_OK);
+	assert(mtllib_buffer_initialize(&public_key, mtllib_pubkey_to_buffer_length(ctx), NULL) == MTLLIB_OK);
+	assert(mtllib_pubkey_to_buffer(NULL, public_key) == MTLLIB_NULL_PARAMS);
+	assert(public_key->buffer_position == 0);
+	assert(mtllib_pubkey_to_buffer(ctx, NULL) == MTLLIB_NULL_PARAMS);
+	assert(public_key->buffer_position == 0);
+	mtllib_buffer_free(public_key);
+	assert(mtllib_buffer_initialize(&public_key, 1, NULL) == MTLLIB_OK);
+	assert(mtllib_pubkey_to_buffer(ctx, public_key) == MTLLIB_BUFFER_ISSUE);
+	mtllib_buffer_free(public_key);
 	mtllib_key_free(ctx);
 
 	return 0;
 }
 
-uint8_t mtltest_mtllib_key_get_pubkey_bytes_null(void)
-{
-	MTLLIB_CTX *ctx = NULL;
-	uint8_t *public_key = NULL;
-
-	assert(mtllib_key_new("SLH-DSA-MTL-SHA2-128S", &ctx, NULL) == MTLLIB_OK);
-	assert(mtllib_key_get_pubkey_bytes(NULL, &public_key) == 0);
-	assert(ctx == NULL);
-	assert(public_key == NULL);
-	assert(mtllib_key_get_pubkey_bytes(ctx, NULL) == 0);
-	assert(ctx == NULL);
-	assert(public_key == NULL);
-	mtllib_key_free(ctx);
-
-	return 0;
-}
-
-uint8_t mtltest_mtllib_key_pubkey_from_params(void)
+uint8_t mtltest_mtllib_pubkey_from_buffer(void)
 {
 	size_t algo = 0;
 	MTLLIB_CTX *ctx = NULL;
-	uint8_t pubkey[128];
-	size_t pubkey_len[] = {32,32,48,48,64,64,32,32,48,48,64,64};
-	uint8_t sid[8];
-	size_t sid_len = 8;
+	uint8_t *pubkey = NULL;
+	size_t pubkey_len[] = {
+        OQS_SIG_sphincs_shake_128s_simple_length_public_key,
+        OQS_SIG_sphincs_shake_128f_simple_length_public_key,
+        OQS_SIG_sphincs_shake_192s_simple_length_public_key,
+        OQS_SIG_sphincs_shake_192f_simple_length_public_key,
+        OQS_SIG_sphincs_shake_256s_simple_length_public_key,
+        OQS_SIG_sphincs_shake_256f_simple_length_public_key,
+        OQS_SIG_sphincs_sha2_128s_simple_length_public_key,
+        OQS_SIG_sphincs_sha2_128f_simple_length_public_key,
+        OQS_SIG_sphincs_sha2_192s_simple_length_public_key,
+        OQS_SIG_sphincs_sha2_192f_simple_length_public_key,
+        OQS_SIG_sphincs_sha2_256s_simple_length_public_key,
+        OQS_SIG_sphincs_sha2_256f_simple_length_public_key,
+        OQS_SIG_ml_dsa_44_length_public_key,
+        OQS_SIG_ml_dsa_65_length_public_key,
+        OQS_SIG_ml_dsa_87_length_public_key,
+//        OQS_SIG_falcon_512_length_public_key,
+        OQS_SIG_falcon_padded_512_length_public_key,
+//        OQS_SIG_falcon_1024_length_public_key,
+        OQS_SIG_falcon_padded_1024_length_public_key,
+        OQS_SIG_mayo_1_length_public_key,
+        OQS_SIG_mayo_2_length_public_key,
+        OQS_SIG_mayo_3_length_public_key,
+        OQS_SIG_mayo_5_length_public_key,
+        OQS_SIG_cross_rsdp_128_balanced_length_public_key,
+        OQS_SIG_cross_rsdp_128_fast_length_public_key,
+        OQS_SIG_cross_rsdp_128_small_length_public_key,
+        OQS_SIG_cross_rsdp_192_balanced_length_public_key,
+        OQS_SIG_cross_rsdp_192_fast_length_public_key,
+        OQS_SIG_cross_rsdp_192_small_length_public_key,
+        OQS_SIG_cross_rsdp_256_balanced_length_public_key,
+        OQS_SIG_cross_rsdp_256_fast_length_public_key,
+        OQS_SIG_cross_rsdp_256_small_length_public_key,
+        OQS_SIG_cross_rsdpg_128_balanced_length_public_key,
+        OQS_SIG_cross_rsdpg_128_fast_length_public_key,
+        OQS_SIG_cross_rsdpg_128_small_length_public_key,
+        OQS_SIG_cross_rsdpg_192_balanced_length_public_key,
+        OQS_SIG_cross_rsdpg_192_fast_length_public_key,
+        OQS_SIG_cross_rsdpg_192_small_length_public_key,
+        OQS_SIG_cross_rsdpg_256_balanced_length_public_key,
+        OQS_SIG_cross_rsdpg_256_fast_length_public_key,
+        OQS_SIG_cross_rsdpg_256_small_length_public_key,
+        OQS_SIG_uov_ov_Is_length_public_key,
+        OQS_SIG_uov_ov_Ip_length_public_key,
+        OQS_SIG_uov_ov_III_length_public_key,
+        OQS_SIG_uov_ov_V_length_public_key,
+        OQS_SIG_uov_ov_Is_pkc_length_public_key,
+        OQS_SIG_uov_ov_Ip_pkc_length_public_key,
+        OQS_SIG_uov_ov_III_pkc_length_public_key,
+        OQS_SIG_uov_ov_V_pkc_length_public_key,
+        OQS_SIG_uov_ov_Is_pkc_skc_length_public_key,
+        OQS_SIG_uov_ov_Ip_pkc_skc_length_public_key,
+        OQS_SIG_uov_ov_III_pkc_skc_length_public_key,
+        OQS_SIG_uov_ov_V_pkc_skc_length_public_key,
+        OQS_SIG_snova_SNOVA_24_5_4_length_public_key,
+        OQS_SIG_snova_SNOVA_24_5_4_SHAKE_length_public_key,
+        OQS_SIG_snova_SNOVA_24_5_4_esk_length_public_key,
+        OQS_SIG_snova_SNOVA_24_5_4_SHAKE_esk_length_public_key,
+        OQS_SIG_snova_SNOVA_37_17_2_length_public_key,
+        OQS_SIG_snova_SNOVA_25_8_3_length_public_key,
+        OQS_SIG_snova_SNOVA_56_25_2_length_public_key,
+        OQS_SIG_snova_SNOVA_49_11_3_length_public_key,
+        OQS_SIG_snova_SNOVA_37_8_4_length_public_key,
+        OQS_SIG_snova_SNOVA_24_5_5_length_public_key,
+        OQS_SIG_snova_SNOVA_60_10_4_length_public_key,
+        OQS_SIG_snova_SNOVA_29_6_5_length_public_key
+	};
+	uint8_t sid[32];
 	FILE *fd = NULL;
-
-	memset(&sid[0], 0x55, 8);
+	MTLLIB_BUFFER *pubkey_buffer = NULL;
+	
+	// OV Keys are very large so it is best to allocate heap space not stack space for test.
+	pubkey = calloc(1, OQS_SIG_uov_ov_V_length_public_key);
+	assert(pubkey != NULL);
+	memset(&sid[0], 0x55, 32);
+	memset(pubkey, 0xaf, 4096);
 	// Setup to get random data for the test pubkey
 	if ((fd = fopen("/dev/random", "r")) == NULL) {
+		free(pubkey);
 		return 1;
 	}
-
 
 	// Test creating key with no context string
 	algo = 0;
@@ -247,7 +313,8 @@ uint8_t mtltest_mtllib_key_pubkey_from_params(void)
 	{
 		fread(pubkey, 128, 1, fd);
 		ctx = NULL;
-		assert(mtllib_key_pubkey_from_params(sig_algos[algo].name, &ctx, NULL, pubkey, pubkey_len[algo], sid, sid_len) == MTLLIB_OK);
+		assert(mtllib_buffer_initialize(&pubkey_buffer, pubkey_len[algo], pubkey) == MTLLIB_OK);
+		assert(mtllib_pubkey_from_buffer(sig_algos[algo].name, &ctx, pubkey_buffer, sid) == MTLLIB_OK);
 		assert(ctx->algo_params == &sig_algos[algo]);
 		assert(ctx->signature != NULL);
 		assert(ctx->secret_key != NULL);
@@ -256,35 +323,17 @@ uint8_t mtltest_mtllib_key_pubkey_from_params(void)
 		assert(memcmp(ctx->public_key, pubkey, pubkey_len[algo]) == 0);
 		assert(ctx->public_key_len == pubkey_len[algo]);
 		assert(ctx->mtl != NULL);
-		assert(ctx->mtl->ctx_str == NULL);
 		mtllib_key_free(ctx);
 		algo++;
-	}
-
-	// Test creating key with context string
-	algo = 0;
-	while (sig_algos[algo].name != NULL)
-	{
-		ctx = NULL;
-		assert(mtllib_key_pubkey_from_params(sig_algos[algo].name, &ctx, "MTLLIB_Test_CTX", pubkey, pubkey_len[algo], sid, sid_len) == MTLLIB_OK);
-		assert(ctx->algo_params == &sig_algos[algo]);
-		assert(ctx->signature != NULL);
-		assert(ctx->secret_key != NULL);
-		assert(ctx->secret_key_len == 0);
-		assert(ctx->public_key != NULL);
-		assert(memcmp(ctx->public_key, pubkey, pubkey_len[algo]) == 0);
-		assert(ctx->public_key_len == pubkey_len[algo]);
-		assert(ctx->mtl != NULL);
-		assert(strcmp(ctx->mtl->ctx_str, "MTLLIB_Test_CTX") == 0);
-		mtllib_key_free(ctx);
-		algo++;
+		mtllib_buffer_free(pubkey_buffer);
 	}
 	fclose(fd);	
+	free(pubkey);
 
 	return 0;
 }
 
-uint8_t mtltest_mtllib_key_pubkey_from_params_null(void)
+uint8_t mtltest_mtllib_pubkey_from_buffer_null(void)
 {
 	MTLLIB_CTX *ctx = NULL;
 	uint8_t sid[8];
@@ -292,65 +341,40 @@ uint8_t mtltest_mtllib_key_pubkey_from_params_null(void)
 
 	memset(&sid[0],0x55, 8);
 	memset(&pubkey[0], 0xaa, 32);
+	MTLLIB_BUFFER *pubkey_buffer = NULL;
 
-	assert(mtllib_key_pubkey_from_params(NULL, &ctx, NULL, &pubkey[0], 32, &sid[0], 8) == MTLLIB_NULL_PARAMS);
-	assert(mtllib_key_pubkey_from_params("SLH-DSA-MTL-SHA2-128S", NULL, NULL, &pubkey[0], 32, &sid[0], 8) == MTLLIB_NULL_PARAMS);
-	assert(mtllib_key_pubkey_from_params("SLH-DSA-MTL-SHA2-128S", &ctx, NULL, NULL, 32, &sid[0], 8) == MTLLIB_NULL_PARAMS);
-	assert(mtllib_key_pubkey_from_params("SLH-DSA-MTL-SHA2-128S", &ctx, NULL, &pubkey[0], 32, NULL, 8) == MTLLIB_NULL_PARAMS);
+	assert(mtllib_buffer_initialize(&pubkey_buffer, 32, pubkey) == MTLLIB_OK);
+	assert(mtllib_pubkey_from_buffer(NULL, &ctx, pubkey_buffer, &sid[0]) == MTLLIB_NULL_PARAMS);
+	assert(mtllib_pubkey_from_buffer(MTL_TEST_VECTOR_SCHEME_NAME, NULL, pubkey_buffer, &sid[0]) == MTLLIB_NULL_PARAMS);
+	assert(mtllib_pubkey_from_buffer(MTL_TEST_VECTOR_SCHEME_NAME, &ctx, NULL, &sid[0]) == MTLLIB_NULL_PARAMS);
+	assert(mtllib_pubkey_from_buffer(MTL_TEST_VECTOR_SCHEME_NAME, &ctx, pubkey_buffer, NULL) == MTLLIB_NULL_PARAMS);
 
+	mtllib_buffer_free(pubkey_buffer);
 	return 0;
 }
 
 uint8_t mtltest_mtllib_key_from_buffer(void)
 {
 	MTLLIB_CTX *ctx = NULL;
-	size_t buffer_no_ctx_size = 153;
-	uint8_t buffer_no_ctx[] =
-		{0x00, 0x00, 0x00, 0x15, 0x53, 0x4c, 0x48, 0x2d, 0x44, 0x53, 0x41, 0x2d, 0x4d, 0x54, 0x4c, 0x2d,
-		 0x53, 0x48, 0x41, 0x32, 0x2d, 0x31, 0x32, 0x38, 0x53, 0x00, 0x00, 0x00, 0x40, 0x79, 0x11, 0xc8,
-		 0x41, 0x32, 0x11, 0x3a, 0x53, 0x86, 0x75, 0x37, 0xf4, 0x45, 0x4c, 0xf3, 0xa0, 0x40, 0x74, 0xab,
-		 0x4b, 0xb4, 0x82, 0x9e, 0x85, 0x1a, 0x77, 0x3e, 0xb8, 0xc0, 0x5e, 0x2b, 0x2c, 0x5c, 0x23, 0x57,
-		 0x30, 0x9a, 0x37, 0x07, 0xd1, 0x08, 0xfe, 0x5c, 0x31, 0xe5, 0xdc, 0xb4, 0xdc, 0xfa, 0xd1, 0x78,
-		 0xfc, 0xaa, 0x51, 0x16, 0xb6, 0x69, 0xb8, 0xb2, 0x63, 0x23, 0xd5, 0x56, 0x86, 0x00, 0x00, 0x00,
-		 0x20, 0x5c, 0x23, 0x57, 0x30, 0x9a, 0x37, 0x07, 0xd1, 0x08, 0xfe, 0x5c, 0x31, 0xe5, 0xdc, 0xb4,
-		 0xdc, 0xfa, 0xd1, 0x78, 0xfc, 0xaa, 0x51, 0x16, 0xb6, 0x69, 0xb8, 0xb2, 0x63, 0x23, 0xd5, 0x56,
-		 0x86, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x08, 0x32, 0x34, 0xf0, 0xf5, 0xbe,
-		 0x58, 0xc4, 0xc6, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10};
-	size_t buffer_ctx_size = 165;
-	uint8_t buffer_ctx[] =
-		{0x00, 0x00, 0x00, 0x15, 0x53, 0x4c, 0x48, 0x2d, 0x44, 0x53, 0x41, 0x2d, 0x4d, 0x54, 0x4c, 0x2d,
-		 0x53, 0x48, 0x41, 0x32, 0x2d, 0x31, 0x32, 0x38, 0x53, 0x00, 0x00, 0x00, 0x40, 0x5c, 0xa2, 0x9c,
-		 0x59, 0xbe, 0xb6, 0x5a, 0x53, 0x61, 0x11, 0x16, 0xd3, 0xab, 0x70, 0xe5, 0x34, 0x98, 0x29, 0x10,
-		 0xa7, 0x1d, 0xe0, 0xc5, 0x11, 0x01, 0xe5, 0xec, 0xa8, 0x21, 0xf9, 0x2f, 0x26, 0xa1, 0x05, 0xf5,
-		 0x54, 0x97, 0x5d, 0xfc, 0x15, 0x3c, 0x9a, 0x99, 0x63, 0x30, 0xff, 0xe4, 0xb8, 0x78, 0xff, 0x0b,
-		 0x33, 0xc9, 0xa4, 0xdc, 0x03, 0x34, 0x19, 0x94, 0x34, 0x8d, 0x05, 0x23, 0x44, 0x00, 0x00, 0x00,
-		 0x20, 0xa1, 0x05, 0xf5, 0x54, 0x97, 0x5d, 0xfc, 0x15, 0x3c, 0x9a, 0x99, 0x63, 0x30, 0xff, 0xe4,
-		 0xb8, 0x78, 0xff, 0x0b, 0x33, 0xc9, 0xa4, 0xdc, 0x03, 0x34, 0x19, 0x94, 0x34, 0x8d, 0x05, 0x23,
-		 0x44, 0x00, 0x01, 0x00, 0x00, 0x00, 0x0c, 0x4d, 0x54, 0x4c, 0x5f, 0x54, 0x45, 0x53, 0x54, 0x5f,
-		 0x43, 0x54, 0x58, 0x00, 0x00, 0x00, 0x08, 0x3b, 0x78, 0x7f, 0xff, 0xb7, 0x53, 0x62, 0xb0, 0x00,
-		 0x00, 0x00, 0x00, 0x00, 0x10};
+	size_t key_buffer_len = MTL_TEST_VECTOR_KEYBUFFER_LEN;
+	uint8_t key_buffer_bytes[] = MTL_TEST_VECTOR_KEYBUFFER;
+	char scheme_str[] = MTL_TEST_VECTOR_SCHEME_UNDERLYING;
+	size_t sk_len = MTL_TEST_VECTOR_SCHEME_SK_LEN;
+	size_t pk_len = MTL_TEST_VECTOR_SCHEME_PK_LEN;
+	MTLLIB_BUFFER *key_buffer = NULL;
+	assert(mtllib_buffer_initialize(&key_buffer, key_buffer_len, key_buffer_bytes) == MTLLIB_OK);
 
-	assert(mtllib_key_from_buffer(buffer_no_ctx, buffer_no_ctx_size, &ctx) == MTLLIB_OK);
-	assert(ctx->algo_params == &sig_algos[6]);
+	assert(mtllib_key_from_buffer(key_buffer, &ctx) == MTLLIB_OK);
+	assert(strcmp(ctx->algo_params->scheme_str,scheme_str) == 0);
 	assert(ctx->signature != NULL);
 	assert(ctx->secret_key != NULL);
-	assert(ctx->secret_key_len == 64);
+	assert(ctx->secret_key_len == sk_len);
 	assert(ctx->public_key != NULL);
-	assert(ctx->public_key_len == 32);
+	assert(ctx->public_key_len == pk_len);
 	assert(ctx->mtl != NULL);
-	assert(ctx->mtl->ctx_str == NULL);
 	mtllib_key_free(ctx);
 
-	assert(mtllib_key_from_buffer(buffer_ctx, buffer_ctx_size, &ctx) == MTLLIB_OK);
-	assert(ctx->algo_params == &sig_algos[6]);
-	assert(ctx->signature != NULL);
-	assert(ctx->secret_key != NULL);
-	assert(ctx->secret_key_len == 64);
-	assert(ctx->public_key != NULL);
-	assert(ctx->public_key_len == 32);
-	assert(ctx->mtl != NULL);
-	assert(strcmp(ctx->mtl->ctx_str, "MTL_TEST_CTX") == 0);
-	mtllib_key_free(ctx);
+	mtllib_buffer_free(key_buffer);
 
 	return 0;
 }
@@ -358,21 +382,20 @@ uint8_t mtltest_mtllib_key_from_buffer(void)
 uint8_t mtltest_mtllib_key_from_buffer_null(void)
 {
 	MTLLIB_CTX *ctx = NULL;
-	size_t buffer_no_ctx_size = 153;
-	uint8_t buffer_no_ctx[] =
-		{0x00, 0x00, 0x00, 0x15, 0x53, 0x4c, 0x48, 0x2d, 0x44, 0x53, 0x41, 0x2d, 0x4d, 0x54, 0x4c, 0x2d,
-		 0x53, 0x48, 0x41, 0x32, 0x2d, 0x31, 0x32, 0x38, 0x53, 0x00, 0x00, 0x00, 0x40, 0x79, 0x11, 0xc8,
-		 0x41, 0x32, 0x11, 0x3a, 0x53, 0x86, 0x75, 0x37, 0xf4, 0x45, 0x4c, 0xf3, 0xa0, 0x40, 0x74, 0xab,
-		 0x4b, 0xb4, 0x82, 0x9e, 0x85, 0x1a, 0x77, 0x3e, 0xb8, 0xc0, 0x5e, 0x2b, 0x2c, 0x5c, 0x23, 0x57,
-		 0x30, 0x9a, 0x37, 0x07, 0xd1, 0x08, 0xfe, 0x5c, 0x31, 0xe5, 0xdc, 0xb4, 0xdc, 0xfa, 0xd1, 0x78,
-		 0xfc, 0xaa, 0x51, 0x16, 0xb6, 0x69, 0xb8, 0xb2, 0x63, 0x23, 0xd5, 0x56, 0x86, 0x00, 0x00, 0x00,
-		 0x20, 0x5c, 0x23, 0x57, 0x30, 0x9a, 0x37, 0x07, 0xd1, 0x08, 0xfe, 0x5c, 0x31, 0xe5, 0xdc, 0xb4,
-		 0xdc, 0xfa, 0xd1, 0x78, 0xfc, 0xaa, 0x51, 0x16, 0xb6, 0x69, 0xb8, 0xb2, 0x63, 0x23, 0xd5, 0x56,
-		 0x86, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x08, 0x32, 0x34, 0xf0, 0xf5, 0xbe,
-		 0x58, 0xc4, 0xc6, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10};
+	size_t key_buffer_len = MTL_TEST_VECTOR_KEYBUFFER_LEN;
+	uint8_t key_buffer_bytes[] = MTL_TEST_VECTOR_KEYBUFFER;
+	MTLLIB_BUFFER *key_buffer = NULL;
+	assert(mtllib_buffer_initialize(&key_buffer, key_buffer_len, key_buffer_bytes) == MTLLIB_OK);
 
-	assert(mtllib_key_from_buffer(NULL, buffer_no_ctx_size, &ctx) == MTLLIB_NULL_PARAMS);
-	assert(mtllib_key_from_buffer(buffer_no_ctx, 0, &ctx) == MTLLIB_NULL_PARAMS);
+	assert(mtllib_key_from_buffer(NULL, &ctx) == MTLLIB_NULL_PARAMS);
+
+	mtllib_buffer_free(key_buffer);
+	assert(mtllib_buffer_initialize(&key_buffer, 0, key_buffer_bytes) == MTLLIB_OK);
+	assert(mtllib_key_from_buffer(key_buffer, &ctx) == MTLLIB_BAD_VALUE);
+	mtllib_buffer_free(key_buffer);
+	assert(mtllib_buffer_initialize(&key_buffer, 1, key_buffer_bytes) == MTLLIB_OK);
+	assert(mtllib_key_from_buffer(key_buffer, &ctx) == MTLLIB_BAD_VALUE);
+	mtllib_buffer_free(key_buffer);
 
 	return 0;
 }
@@ -380,112 +403,72 @@ uint8_t mtltest_mtllib_key_from_buffer_null(void)
 uint8_t mtltest_mtllib_key_to_buffer(void)
 {
 	MTLLIB_CTX *ctx = NULL;
-	size_t buffer_size = 0;
-	uint8_t *buffer = NULL;
-	size_t identifier_len = 26;
-	uint8_t identifier[] =
-		{0x00, 0x00, 0x00, 0x16, 0x53, 0x4c, 0x48, 0x2d, 0x44, 0x53, 0x41, 0x2d, 0x4d, 0x54, 0x4c, 0x2d,
-		 0x53, 0x48, 0x41, 0x4b, 0x45, 0x2d, 0x31, 0x32, 0x38, 0x53};
-	size_t context_str_len = 12;
-	char *context_str = "MTL_TEST_CTX";
+	MTLLIB_BUFFER *buffer = NULL;
+	size_t sk_len = MTL_TEST_VECTOR_SCHEME_SK_LEN;
+	size_t pk_len = MTL_TEST_VECTOR_SCHEME_PK_LEN;
+	size_t secparam = MTL_TEST_VECTOR_SCHEME_SECPARAM;
+	uint8_t sk_len_bytes[4];
+	uint8_t pk_len_bytes[4];
+	uint32_to_bytes(sk_len_bytes, sk_len);
+	uint32_to_bytes(pk_len_bytes, pk_len);
+	MTL_INDEX ZERO = 0;
 
-	assert(mtllib_key_new("SLH-DSA-MTL-SHAKE-128S", &ctx, NULL) == MTLLIB_OK);
-	buffer_size = mtllib_key_to_buffer(ctx, &buffer);
-	assert(buffer_size == 154);
+	char alg_str[] = MTL_TEST_VECTOR_SCHEME_NAME;
+	uint8_t identifier[64];
+	identifier[0] = 0; identifier[1] = 0; identifier[2] = 0;
+	identifier[3] = strlen(alg_str);
+	memcpy(identifier+4, alg_str, strlen(alg_str));
+	size_t identifier_len = 4 + strlen(alg_str);
+
+	size_t offsets[] = {
+		identifier_len,
+		identifier_len+4+sk_len,
+		identifier_len+4+sk_len+4+pk_len,
+		identifier_len+4+sk_len+4+pk_len+2,
+		identifier_len+4+sk_len+4+pk_len+2+4+2*secparam,
+		identifier_len+4+sk_len+4+pk_len+2+4+2*secparam+sizeof(MTL_INDEX),
+	};
+
+	assert(mtllib_buffer_initialize(&buffer, MTL_TEST_VECTOR_KEYBUFFER_LEN, NULL) == MTLLIB_OK);
+
+	assert(mtllib_key_new(alg_str, &ctx) == MTLLIB_OK);
+	assert(mtllib_key_to_buffer_length(ctx) == MTL_TEST_VECTOR_KEYBUFFER_LEN);
+	assert(mtllib_key_to_buffer(ctx, buffer) == MTLLIB_OK);
+	assert(buffer->buffer_position == MTL_TEST_VECTOR_KEYBUFFER_LEN);
 	assert(buffer != NULL);
 	// Idenfifier String
-	assert(memcmp(buffer, &identifier[0], identifier_len) == 0);
+	assert(memcmp(buffer->buffer_data, &identifier[0], identifier_len) == 0);
 	// SK Length
-	assert(buffer[26] == 0);
-	assert(buffer[27] == 0);
-	assert(buffer[28] == 0);
-	assert(buffer[29] == 64);
+	assert(memcmp(buffer->buffer_data+offsets[0], sk_len_bytes, 4) == 0);
 	// PK Length
-	assert(buffer[94] == 0);
-	assert(buffer[95] == 0);
-	assert(buffer[96] == 0);
-	assert(buffer[97] == 32);
+	assert(memcmp(buffer->buffer_data+offsets[1], pk_len_bytes, 4) == 0);
 	// Randomizer
-	assert(buffer[130] == 0);
-	assert(buffer[131] == 1);
-	// Context String
-	assert(buffer[132] == 0);
-	assert(buffer[133] == 0);
-	assert(buffer[134] == 0);
-	assert(buffer[135] == 0);
+	assert(memcmp(buffer->buffer_data+offsets[2], (uint8_t []){0,1}, 2) == 0);
 	// SID
-	assert(buffer[136] == 0);
-	assert(buffer[137] == 0);
-	assert(buffer[138] == 0);
-	assert(buffer[139] == 8);
+	assert(memcmp(buffer->buffer_data+offsets[3], (uint8_t []){0,0,0,2*secparam}, 4) == 0);
 	// Leaf Count
-	assert(buffer[148] == 0);
-	assert(buffer[149] == 0);
-	assert(buffer[150] == 0);
-	assert(buffer[151] == 0);
+	assert(memcmp(buffer->buffer_data+offsets[4], &ZERO, sizeof(MTL_INDEX)) == 0);
 	// Hash Size
-	assert(buffer[152] == 0);
-	assert(buffer[153] == 16);
-	free(buffer);
-
-	assert(mtllib_key_new("SLH-DSA-MTL-SHAKE-128S", &ctx, context_str) == MTLLIB_OK);
-	buffer_size = mtllib_key_to_buffer(ctx, &buffer);
-	assert(buffer_size == 166);
-	assert(buffer != NULL);
-	assert(buffer != NULL);
-	// Idenfifier String
-	assert(memcmp(buffer, &identifier[0], identifier_len) == 0);
-	// SK Length
-	assert(buffer[26] == 0);
-	assert(buffer[27] == 0);
-	assert(buffer[28] == 0);
-	assert(buffer[29] == 64);
-	// PK Length
-	assert(buffer[94] == 0);
-	assert(buffer[95] == 0);
-	assert(buffer[96] == 0);
-	assert(buffer[97] == 32);
-	// Randomizer
-	assert(buffer[130] == 0);
-	assert(buffer[131] == 1);
-	// Context String
-	assert(buffer[132] == 0);
-	assert(buffer[133] == 0);
-	assert(buffer[134] == 0);
-	assert(buffer[135] == context_str_len);
-	assert(memcmp(&buffer[136], context_str, context_str_len) == 0);
-	// SID
-	assert(buffer[148] == 0);
-	assert(buffer[149] == 0);
-	assert(buffer[150] == 0);
-	assert(buffer[151] == 8);
-	// Leaf Count
-	assert(buffer[160] == 0);
-	assert(buffer[161] == 0);
-	assert(buffer[162] == 0);
-	assert(buffer[163] == 0);
-	// Hash Size
-	assert(buffer[164] == 0);
-	assert(buffer[165] == 16);
-	free(buffer);
-
+	assert(memcmp(buffer->buffer_data+offsets[5], (uint8_t []){0,MTL_TEST_VECTOR_SCHEME_SECPARAM}, 2) == 0);
+	mtllib_buffer_free(buffer);
 	mtllib_key_free(ctx);
+
 	return 0;
 }
 
 uint8_t mtltest_mtllib_key_to_buffer_null(void)
 {
 	MTLLIB_CTX *ctx = NULL;
-	size_t buffer_size = 0;
-	uint8_t *buffer = NULL;
+	MTLLIB_BUFFER *buffer = NULL;
 
-	assert(mtllib_key_new("SLH-DSA-MTL-SHAKE-128S", &ctx, NULL) == MTLLIB_OK);
-	buffer_size = mtllib_key_to_buffer(NULL, &buffer);
-	assert(buffer_size == 0);
-	assert(buffer == NULL);
-	buffer_size = mtllib_key_to_buffer(ctx, NULL);
-	assert(buffer_size == 0);
-	assert(buffer == NULL);
+	assert(mtllib_buffer_initialize(&buffer, MTL_TEST_VECTOR_KEYBUFFER_LEN, NULL) == MTLLIB_OK);
+	assert(mtllib_key_new(MTL_TEST_VECTOR_SCHEME_NAME, &ctx) == MTLLIB_OK);
+	assert(mtllib_key_to_buffer(NULL, buffer) == MTLLIB_NULL_PARAMS);
+	assert(mtllib_key_to_buffer(ctx, NULL) == MTLLIB_NULL_PARAMS);
+	assert(mtllib_buffer_free(buffer) == MTLLIB_OK);
+	assert(mtllib_buffer_initialize(&buffer, 1, NULL) == MTLLIB_OK);
+	assert(mtllib_key_to_buffer(ctx, buffer) == MTLLIB_BUFFER_ISSUE);
+	assert(mtllib_buffer_free(buffer) == MTLLIB_OK);
 
 	mtllib_key_free(ctx);
 	return 0;
@@ -495,83 +478,85 @@ uint8_t mtltest_mtllib_sign_append(void)
 {
 	MTLLIB_CTX *ctx = NULL;
 	MTL_HANDLE *handle;
-	size_t buffer_no_ctx_size = 153;
-	uint8_t sid_val[] = {0x32, 0x34, 0xf0, 0xf5, 0xbe, 0x58, 0xc4, 0xc6};
-	uint8_t msg[] = "Test Message";
-	size_t msg_len = 13;
-	size_t index = 0;
-	uint8_t buffer_no_ctx[] =
-		{0x00, 0x00, 0x00, 0x15, 0x53, 0x4c, 0x48, 0x2d, 0x44, 0x53, 0x41, 0x2d, 0x4d, 0x54, 0x4c, 0x2d,
-		 0x53, 0x48, 0x41, 0x32, 0x2d, 0x31, 0x32, 0x38, 0x53, 0x00, 0x00, 0x00, 0x40, 0x79, 0x11, 0xc8,
-		 0x41, 0x32, 0x11, 0x3a, 0x53, 0x86, 0x75, 0x37, 0xf4, 0x45, 0x4c, 0xf3, 0xa0, 0x40, 0x74, 0xab,
-		 0x4b, 0xb4, 0x82, 0x9e, 0x85, 0x1a, 0x77, 0x3e, 0xb8, 0xc0, 0x5e, 0x2b, 0x2c, 0x5c, 0x23, 0x57,
-		 0x30, 0x9a, 0x37, 0x07, 0xd1, 0x08, 0xfe, 0x5c, 0x31, 0xe5, 0xdc, 0xb4, 0xdc, 0xfa, 0xd1, 0x78,
-		 0xfc, 0xaa, 0x51, 0x16, 0xb6, 0x69, 0xb8, 0xb2, 0x63, 0x23, 0xd5, 0x56, 0x86, 0x00, 0x00, 0x00,
-		 0x20, 0x5c, 0x23, 0x57, 0x30, 0x9a, 0x37, 0x07, 0xd1, 0x08, 0xfe, 0x5c, 0x31, 0xe5, 0xdc, 0xb4,
-		 0xdc, 0xfa, 0xd1, 0x78, 0xfc, 0xaa, 0x51, 0x16, 0xb6, 0x69, 0xb8, 0xb2, 0x63, 0x23, 0xd5, 0x56,
-		 0x86, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x08, 0x32, 0x34, 0xf0, 0xf5, 0xbe,
-		 0x58, 0xc4, 0xc6, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10};
 
-	assert(mtllib_key_from_buffer(buffer_no_ctx, buffer_no_ctx_size, &ctx) == MTLLIB_OK);
-	assert(ctx->algo_params == &sig_algos[6]);
-	assert(ctx->signature != NULL);
-	assert(ctx->secret_key != NULL);
-	assert(ctx->secret_key_len == 64);
-	assert(ctx->public_key != NULL);
-	assert(ctx->public_key_len == 32);
-	assert(ctx->mtl != NULL);
-	assert(ctx->mtl->ctx_str == NULL);
+	uint8_t sid[] = MTL_TEST_VECTOR_SID;
+	size_t key_buffer_len = MTL_TEST_VECTOR_KEYBUFFER_LEN;
+	uint8_t key_buffer_bytes[] = MTL_TEST_VECTOR_KEYBUFFER;
+	uint8_t msg[] = MTL_TEST_VECTOR_MSG;
+	size_t msg_len = MTL_TEST_VECTOR_MSG_LEN;
+	uint8_t ctx_str[] = MTL_TEST_VECTOR_CTX;
+	size_t ctx_str_len = MTL_TEST_VECTOR_CTX_LEN;
+	size_t secparam = MTL_TEST_VECTOR_SCHEME_SECPARAM;
+	size_t index = 0;
+	MTLLIB_BUFFER *key_buffer = NULL;
+	MTLLIB_BUFFER *msg_buffer = NULL;
+	MTLLIB_BUFFER *ctx_str_buffer = NULL;
+	
+	assert(mtllib_buffer_initialize(&key_buffer, key_buffer_len, key_buffer_bytes) == MTLLIB_OK);
+	assert(mtllib_key_from_buffer(key_buffer, &ctx) == MTLLIB_OK);
+	assert(mtllib_buffer_free(key_buffer) == MTLLIB_OK);	
+	assert(mtllib_buffer_initialize(&msg_buffer, msg_len, msg) == MTLLIB_OK);
 
 	for (index = 0; index < 15; index++)
 	{
-		assert(mtllib_sign_append(ctx, msg, msg_len, &handle) == MTLLIB_OK);
+		assert(mtllib_sign_append(ctx, msg_buffer, &handle) == MTLLIB_OK);
 		assert(&handle != NULL);
 		assert(handle->leaf_index == index);
-		assert(handle->sid_len == 8);
-		assert(memcmp(handle->sid, &sid_val[0], 8) == 0);
+		assert(handle->sid_len == 2*secparam);
+		assert(memcmp(handle->sid, &sid[0], 2*secparam) == 0);
 		mtllib_sign_free_handle(&handle);
 		assert(handle == NULL);
 	}
-
+	mtllib_buffer_free(msg_buffer);
 	mtllib_key_free(ctx);
+
+	// Re-test with ctx_str
+	assert(mtllib_buffer_initialize(&key_buffer, key_buffer_len, key_buffer_bytes) == MTLLIB_OK);
+	assert(mtllib_key_from_buffer(key_buffer, &ctx) == MTLLIB_OK);
+	assert(mtllib_buffer_free(key_buffer) == MTLLIB_OK);
+	assert(mtllib_buffer_initialize(&msg_buffer, msg_len, msg) == MTLLIB_OK);
+	assert(mtllib_buffer_initialize(&ctx_str_buffer, ctx_str_len, ctx_str) == MTLLIB_OK);
+
+	for (index = 0; index < 15; index++)
+	{
+		assert(mtllib_sign_append_with_ctx_str(ctx, msg_buffer, ctx_str_buffer, &handle) == MTLLIB_OK);
+		assert(&handle != NULL);
+		assert(handle->leaf_index == index);
+		assert(handle->sid_len == 2*secparam);
+		assert(memcmp(handle->sid, &sid[0], 2*secparam) == 0);
+		mtllib_sign_free_handle(&handle);
+		assert(handle == NULL);
+	}
+	mtllib_buffer_free(msg_buffer);
+	mtllib_buffer_free(ctx_str_buffer);
+	mtllib_key_free(ctx);
+
 	return 0;
 }
 uint8_t mtltest_mtllib_sign_append_null(void)
 {
 	MTLLIB_CTX *ctx = NULL;
 	MTL_HANDLE *handle;
-	size_t buffer_no_ctx_size = 153;
-	uint8_t msg[] = "Test Message";
-	size_t msg_len = 13;
-	uint8_t buffer_no_ctx[] =
-		{0x00, 0x00, 0x00, 0x15, 0x53, 0x4c, 0x48, 0x2d, 0x44, 0x53, 0x41, 0x2d, 0x4d, 0x54, 0x4c, 0x2d,
-		 0x53, 0x48, 0x41, 0x32, 0x2d, 0x31, 0x32, 0x38, 0x53, 0x00, 0x00, 0x00, 0x40, 0x79, 0x11, 0xc8,
-		 0x41, 0x32, 0x11, 0x3a, 0x53, 0x86, 0x75, 0x37, 0xf4, 0x45, 0x4c, 0xf3, 0xa0, 0x40, 0x74, 0xab,
-		 0x4b, 0xb4, 0x82, 0x9e, 0x85, 0x1a, 0x77, 0x3e, 0xb8, 0xc0, 0x5e, 0x2b, 0x2c, 0x5c, 0x23, 0x57,
-		 0x30, 0x9a, 0x37, 0x07, 0xd1, 0x08, 0xfe, 0x5c, 0x31, 0xe5, 0xdc, 0xb4, 0xdc, 0xfa, 0xd1, 0x78,
-		 0xfc, 0xaa, 0x51, 0x16, 0xb6, 0x69, 0xb8, 0xb2, 0x63, 0x23, 0xd5, 0x56, 0x86, 0x00, 0x00, 0x00,
-		 0x20, 0x5c, 0x23, 0x57, 0x30, 0x9a, 0x37, 0x07, 0xd1, 0x08, 0xfe, 0x5c, 0x31, 0xe5, 0xdc, 0xb4,
-		 0xdc, 0xfa, 0xd1, 0x78, 0xfc, 0xaa, 0x51, 0x16, 0xb6, 0x69, 0xb8, 0xb2, 0x63, 0x23, 0xd5, 0x56,
-		 0x86, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x08, 0x32, 0x34, 0xf0, 0xf5, 0xbe,
-		 0x58, 0xc4, 0xc6, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10};
+	size_t key_buffer_len = MTL_TEST_VECTOR_KEYBUFFER_LEN;
+	uint8_t key_buffer_bytes[] = MTL_TEST_VECTOR_KEYBUFFER;
+	uint8_t msg[] = MTL_TEST_VECTOR_MSG;
+	size_t msg_len = MTL_TEST_VECTOR_MSG_LEN;
+	MTLLIB_BUFFER *key_buffer = NULL;
+	MTLLIB_BUFFER *msg_buffer = NULL;
 
-	assert(mtllib_key_from_buffer(buffer_no_ctx, buffer_no_ctx_size, &ctx) == MTLLIB_OK);
-	assert(ctx->algo_params == &sig_algos[6]);
-	assert(ctx->signature != NULL);
-	assert(ctx->secret_key != NULL);
-	assert(ctx->secret_key_len == 64);
-	assert(ctx->public_key != NULL);
-	assert(ctx->public_key_len == 32);
-	assert(ctx->mtl != NULL);
-	assert(ctx->mtl->ctx_str == NULL);
+	assert(mtllib_buffer_initialize(&key_buffer, key_buffer_len, key_buffer_bytes) == MTLLIB_OK);
+	assert(mtllib_key_from_buffer(key_buffer, &ctx) == MTLLIB_OK);
+	assert(mtllib_buffer_initialize(&msg_buffer, msg_len, msg) == MTLLIB_OK);
 
-	assert(mtllib_sign_append(NULL, msg, msg_len, &handle) == MTLLIB_NULL_PARAMS);
+	assert(mtllib_sign_append(NULL, msg_buffer, &handle) == MTLLIB_NULL_PARAMS);
 	assert(handle == NULL);
 	mtllib_sign_free_handle(&handle);
 	assert(handle == NULL);
-	assert(mtllib_sign_append(ctx, NULL, msg_len, &handle) == MTLLIB_NULL_PARAMS);
-	assert(mtllib_sign_append(ctx, msg, msg_len, NULL) == MTLLIB_NULL_PARAMS);
+	assert(mtllib_sign_append(ctx, NULL, &handle) == MTLLIB_NULL_PARAMS);
+	assert(mtllib_sign_append(ctx, msg_buffer, NULL) == MTLLIB_NULL_PARAMS);
+	mtllib_buffer_free(key_buffer);
 
+	mtllib_buffer_free(msg_buffer);
 	mtllib_key_free(ctx);
 	return 0;
 }
@@ -587,35 +572,24 @@ uint8_t mtltest_mtllib_sign_get_condensed_sig(void)
 {
 	MTLLIB_CTX *ctx = NULL;
 	MTL_HANDLE *handle = NULL;
-	size_t buffer_no_ctx_size = 153;
-	uint8_t sid_val[] = {0x32, 0x34, 0xf0, 0xf5, 0xbe, 0x58, 0xc4, 0xc6};
-	uint8_t msg[] = "Test Message";
-	size_t msg_len = 13;
+	uint8_t sid[] = MTL_TEST_VECTOR_SID;
+	size_t key_buffer_len = MTL_TEST_VECTOR_KEYBUFFER_LEN;
+	uint8_t key_buffer_bytes[] = MTL_TEST_VECTOR_KEYBUFFER;
+	uint8_t msg[] = MTL_TEST_VECTOR_MSG;
+	size_t msg_len = MTL_TEST_VECTOR_MSG_LEN;
+	size_t secparam = MTL_TEST_VECTOR_SCHEME_SECPARAM;
 	size_t index = 0;
-	uint8_t *sig;
-	size_t siglen;
-	size_t hashes[] = {4, 4, 4, 4, 4, 4, 4, 4, 3, 3, 3, 3, 2, 2, 1};
-	uint8_t buffer_no_ctx[] =
-		{0x00, 0x00, 0x00, 0x15, 0x53, 0x4c, 0x48, 0x2d, 0x44, 0x53, 0x41, 0x2d, 0x4d, 0x54, 0x4c, 0x2d,
-		 0x53, 0x48, 0x41, 0x32, 0x2d, 0x31, 0x32, 0x38, 0x53, 0x00, 0x00, 0x00, 0x40, 0x79, 0x11, 0xc8,
-		 0x41, 0x32, 0x11, 0x3a, 0x53, 0x86, 0x75, 0x37, 0xf4, 0x45, 0x4c, 0xf3, 0xa0, 0x40, 0x74, 0xab,
-		 0x4b, 0xb4, 0x82, 0x9e, 0x85, 0x1a, 0x77, 0x3e, 0xb8, 0xc0, 0x5e, 0x2b, 0x2c, 0x5c, 0x23, 0x57,
-		 0x30, 0x9a, 0x37, 0x07, 0xd1, 0x08, 0xfe, 0x5c, 0x31, 0xe5, 0xdc, 0xb4, 0xdc, 0xfa, 0xd1, 0x78,
-		 0xfc, 0xaa, 0x51, 0x16, 0xb6, 0x69, 0xb8, 0xb2, 0x63, 0x23, 0xd5, 0x56, 0x86, 0x00, 0x00, 0x00,
-		 0x20, 0x5c, 0x23, 0x57, 0x30, 0x9a, 0x37, 0x07, 0xd1, 0x08, 0xfe, 0x5c, 0x31, 0xe5, 0xdc, 0xb4,
-		 0xdc, 0xfa, 0xd1, 0x78, 0xfc, 0xaa, 0x51, 0x16, 0xb6, 0x69, 0xb8, 0xb2, 0x63, 0x23, 0xd5, 0x56,
-		 0x86, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x08, 0x32, 0x34, 0xf0, 0xf5, 0xbe,
-		 0x58, 0xc4, 0xc6, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10};
+	MTLLIB_BUFFER *key_buffer = NULL;
+	MTLLIB_BUFFER *sig = NULL;
+	MTLLIB_BUFFER *msg_buffer = NULL;
+	size_t sig_len;
+	size_t hashes[] = {3, 3, 3, 3, 3, 3, 3, 3, 2, 2, 2, 2, 1, 1, 0};
+	size_t constant_overhead = 4 + 3*secparam + (3*sizeof(MTL_INDEX)); // randomizer + flags + SID + (index+left_rung+right_rung) + sibling_count
 
-	assert(mtllib_key_from_buffer(buffer_no_ctx, buffer_no_ctx_size, &ctx) == MTLLIB_OK);
-	assert(ctx->algo_params == &sig_algos[6]);
-	assert(ctx->signature != NULL);
-	assert(ctx->secret_key != NULL);
-	assert(ctx->secret_key_len == 64);
-	assert(ctx->public_key != NULL);
-	assert(ctx->public_key_len == 32);
-	assert(ctx->mtl != NULL);
-	assert(ctx->mtl->ctx_str == NULL);
+	assert(mtllib_buffer_initialize(&key_buffer, key_buffer_len, key_buffer_bytes) == MTLLIB_OK);
+	assert(mtllib_key_from_buffer(key_buffer, &ctx) == MTLLIB_OK);
+	assert(mtllib_buffer_free(key_buffer) == MTLLIB_OK);	
+	assert(mtllib_buffer_initialize(&msg_buffer, msg_len, msg) == MTLLIB_OK);
 
 	for (index = 0; index < 15; index++)
 	{
@@ -624,245 +598,230 @@ uint8_t mtltest_mtllib_sign_get_condensed_sig(void)
 			mtllib_sign_free_handle(&handle);
 			assert(handle == NULL);
 		}
-		assert(mtllib_sign_append(ctx, msg, msg_len, &handle) == MTLLIB_OK);
+		assert(mtllib_sign_append(ctx, msg_buffer,  &handle) == MTLLIB_OK);
 		assert(&handle != NULL);
 		assert(handle->leaf_index == index);
-		assert(handle->sid_len == 8);
-		assert(memcmp(handle->sid, &sid_val[0], 8) == 0);
+		assert(handle->sid_len == 2*secparam);
+		assert(memcmp(handle->sid, &sid[0], 2*secparam) == 0);
 	}
 
 	for (index = 0; index < 15; index++)
 	{
 		handle->leaf_index = index;
-		assert(mtllib_sign_get_condensed_sig(ctx, handle, &sig, &siglen) == MTLLIB_OK);
-		assert(siglen == 24 + (hashes[index] * 16));
-		free(sig);
+		sig_len = mtllib_sign_get_condensed_sig_length(ctx, handle);
+		assert(sig_len == constant_overhead + (hashes[index] * secparam));
+		assert(mtllib_buffer_initialize(&sig, sig_len, NULL) == MTLLIB_OK);
+		assert(mtllib_sign_get_condensed_sig(ctx, handle, sig) == MTLLIB_OK);
+		assert(sig->buffer_position == sig_len);
+		assert(mtllib_buffer_free(sig) == MTLLIB_OK);
 	}
 
+	mtllib_buffer_free(msg_buffer);
 	mtllib_sign_free_handle(&handle);
 	mtllib_key_free(ctx);
+
 	return 0;
 }
 uint8_t mtltest_mtllib_sign_get_condensed_sig_null(void)
 {
 	MTLLIB_CTX *ctx = NULL;
 	MTL_HANDLE *handle = NULL;
-	size_t buffer_no_ctx_size = 153;
-	uint8_t sid_val[] = {0x32, 0x34, 0xf0, 0xf5, 0xbe, 0x58, 0xc4, 0xc6};
-	uint8_t msg[] = "Test Message";
-	size_t msg_len = 13;
+	uint8_t sid[] = MTL_TEST_VECTOR_SID;
+	size_t key_buffer_len = MTL_TEST_VECTOR_KEYBUFFER_LEN;
+	uint8_t key_buffer_bytes[] = MTL_TEST_VECTOR_KEYBUFFER;
+	uint8_t msg[] = MTL_TEST_VECTOR_MSG;
+	size_t msg_len = MTL_TEST_VECTOR_MSG_LEN;
+	size_t secparam = MTL_TEST_VECTOR_SCHEME_SECPARAM;
 	size_t index = 0;
-	uint8_t *sig;
-	size_t siglen;
-	uint8_t buffer_no_ctx[] =
-		{0x00, 0x00, 0x00, 0x15, 0x53, 0x4c, 0x48, 0x2d, 0x44, 0x53, 0x41, 0x2d, 0x4d, 0x54, 0x4c, 0x2d,
-		 0x53, 0x48, 0x41, 0x32, 0x2d, 0x31, 0x32, 0x38, 0x53, 0x00, 0x00, 0x00, 0x40, 0x79, 0x11, 0xc8,
-		 0x41, 0x32, 0x11, 0x3a, 0x53, 0x86, 0x75, 0x37, 0xf4, 0x45, 0x4c, 0xf3, 0xa0, 0x40, 0x74, 0xab,
-		 0x4b, 0xb4, 0x82, 0x9e, 0x85, 0x1a, 0x77, 0x3e, 0xb8, 0xc0, 0x5e, 0x2b, 0x2c, 0x5c, 0x23, 0x57,
-		 0x30, 0x9a, 0x37, 0x07, 0xd1, 0x08, 0xfe, 0x5c, 0x31, 0xe5, 0xdc, 0xb4, 0xdc, 0xfa, 0xd1, 0x78,
-		 0xfc, 0xaa, 0x51, 0x16, 0xb6, 0x69, 0xb8, 0xb2, 0x63, 0x23, 0xd5, 0x56, 0x86, 0x00, 0x00, 0x00,
-		 0x20, 0x5c, 0x23, 0x57, 0x30, 0x9a, 0x37, 0x07, 0xd1, 0x08, 0xfe, 0x5c, 0x31, 0xe5, 0xdc, 0xb4,
-		 0xdc, 0xfa, 0xd1, 0x78, 0xfc, 0xaa, 0x51, 0x16, 0xb6, 0x69, 0xb8, 0xb2, 0x63, 0x23, 0xd5, 0x56,
-		 0x86, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x08, 0x32, 0x34, 0xf0, 0xf5, 0xbe,
-		 0x58, 0xc4, 0xc6, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10};
+	MTLLIB_BUFFER *key_buffer = NULL;
+	MTLLIB_BUFFER *sig = NULL;
+	MTLLIB_BUFFER *msg_buffer = NULL;
 
-	assert(mtllib_key_from_buffer(buffer_no_ctx, buffer_no_ctx_size, &ctx) == MTLLIB_OK);
-	assert(ctx->algo_params == &sig_algos[6]);
-	assert(ctx->signature != NULL);
-	assert(ctx->secret_key != NULL);
-	assert(ctx->secret_key_len == 64);
-	assert(ctx->public_key != NULL);
-	assert(ctx->public_key_len == 32);
-	assert(ctx->mtl != NULL);
-	assert(ctx->mtl->ctx_str == NULL);
+	assert(mtllib_buffer_initialize(&sig, MTL_TEST_VECTOR_CONDENSED_SIG_LEN, NULL) == MTLLIB_OK);;
+	assert(mtllib_buffer_initialize(&key_buffer, key_buffer_len, key_buffer_bytes) == MTLLIB_OK);;
+	assert(mtllib_key_from_buffer(key_buffer, &ctx) == MTLLIB_OK);
+	assert(mtllib_buffer_free(key_buffer) == MTLLIB_OK);	
+	assert(mtllib_buffer_initialize(&msg_buffer, msg_len, msg) == MTLLIB_OK);
 
-	assert(mtllib_sign_append(ctx, msg, msg_len, &handle) == MTLLIB_OK);
+	assert(mtllib_sign_append(ctx, msg_buffer, &handle) == MTLLIB_OK);
 	assert(&handle != NULL);
 	assert(handle->leaf_index == index);
-	assert(handle->sid_len == 8);
-	assert(memcmp(handle->sid, &sid_val[0], 8) == 0);
+	assert(handle->sid_len == 2*secparam);
+	assert(memcmp(handle->sid, &sid[0], 2*secparam) == 0);
 
-	assert(mtllib_sign_get_condensed_sig(NULL, handle, &sig, &siglen) == MTLLIB_NULL_PARAMS);
-	assert(siglen == 0);
-	assert(mtllib_sign_get_condensed_sig(ctx, NULL, &sig, &siglen) == MTLLIB_NULL_PARAMS);
-	assert(siglen == 0);
-	assert(mtllib_sign_get_condensed_sig(ctx, handle, NULL, &siglen) == MTLLIB_NULL_PARAMS);
-	assert(siglen == 0);
-	assert(mtllib_sign_get_condensed_sig(ctx, handle, &sig, NULL) == MTLLIB_NULL_PARAMS);
-	assert(siglen == 0);
+	assert(mtllib_sign_get_condensed_sig(NULL, handle, sig) == MTLLIB_NULL_PARAMS);
+	assert(sig->buffer_position == 0);
+	assert(mtllib_sign_get_condensed_sig(ctx, NULL, sig) == MTLLIB_NULL_PARAMS);
+	assert(sig->buffer_position == 0);
+	assert(mtllib_sign_get_condensed_sig(ctx, handle, NULL) == MTLLIB_NULL_PARAMS);
+	assert(sig->buffer_position == 0);
+	assert(mtllib_buffer_free(sig) == MTLLIB_OK);
+	assert(mtllib_buffer_initialize(&sig, 1, NULL) == MTLLIB_OK);
+	assert(mtllib_sign_get_condensed_sig(ctx, handle, sig) == MTLLIB_BUFFER_ISSUE);
+	assert(sig->buffer_position == 0);
 
+	mtllib_buffer_free(sig);
+	mtllib_buffer_free(msg_buffer);
 	mtllib_sign_free_handle(&handle);
 	mtllib_key_free(ctx);
+	
 	return 0;
 }
 uint8_t mtltest_mtllib_sign_get_signed_ladder(void)
 {
 	MTLLIB_CTX *ctx = NULL;
 	MTL_HANDLE *handle = NULL;
-	size_t buffer_no_ctx_size = 153;
-	uint8_t sid_val[] = {0x32, 0x34, 0xf0, 0xf5, 0xbe, 0x58, 0xc4, 0xc6};
-	uint8_t msg[] = "Test Message";
-	size_t msg_len = 13;
+	uint8_t sid[] = MTL_TEST_VECTOR_SID;
+	size_t key_buffer_len = MTL_TEST_VECTOR_KEYBUFFER_LEN;
+	uint8_t key_buffer_bytes[] = MTL_TEST_VECTOR_KEYBUFFER;
+	uint8_t msg[] = MTL_TEST_VECTOR_MSG;
+	size_t msg_len = MTL_TEST_VECTOR_MSG_LEN;
+	size_t secparam = MTL_TEST_VECTOR_SCHEME_SECPARAM;
+	size_t num_messages = MTL_TEST_VECTOR_NUM_MESSAGES;
 	size_t index = 0;
-	uint8_t *ladder;
-	size_t ladder_len;
-	uint8_t buffer_no_ctx[] =
-		{0x00, 0x00, 0x00, 0x15, 0x53, 0x4c, 0x48, 0x2d, 0x44, 0x53, 0x41, 0x2d, 0x4d, 0x54, 0x4c, 0x2d,
-		 0x53, 0x48, 0x41, 0x32, 0x2d, 0x31, 0x32, 0x38, 0x53, 0x00, 0x00, 0x00, 0x40, 0x79, 0x11, 0xc8,
-		 0x41, 0x32, 0x11, 0x3a, 0x53, 0x86, 0x75, 0x37, 0xf4, 0x45, 0x4c, 0xf3, 0xa0, 0x40, 0x74, 0xab,
-		 0x4b, 0xb4, 0x82, 0x9e, 0x85, 0x1a, 0x77, 0x3e, 0xb8, 0xc0, 0x5e, 0x2b, 0x2c, 0x5c, 0x23, 0x57,
-		 0x30, 0x9a, 0x37, 0x07, 0xd1, 0x08, 0xfe, 0x5c, 0x31, 0xe5, 0xdc, 0xb4, 0xdc, 0xfa, 0xd1, 0x78,
-		 0xfc, 0xaa, 0x51, 0x16, 0xb6, 0x69, 0xb8, 0xb2, 0x63, 0x23, 0xd5, 0x56, 0x86, 0x00, 0x00, 0x00,
-		 0x20, 0x5c, 0x23, 0x57, 0x30, 0x9a, 0x37, 0x07, 0xd1, 0x08, 0xfe, 0x5c, 0x31, 0xe5, 0xdc, 0xb4,
-		 0xdc, 0xfa, 0xd1, 0x78, 0xfc, 0xaa, 0x51, 0x16, 0xb6, 0x69, 0xb8, 0xb2, 0x63, 0x23, 0xd5, 0x56,
-		 0x86, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x08, 0x32, 0x34, 0xf0, 0xf5, 0xbe,
-		 0x58, 0xc4, 0xc6, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10};
+	MTLLIB_BUFFER *key_buffer = NULL;
+	MTLLIB_BUFFER *ladder = NULL;
+	MTLLIB_BUFFER *msg_buffer = NULL;
+	size_t expected_ladder_len = 
+		MTL_TEST_VECTOR_FULL_SIG_LEN
+		- MTL_TEST_VECTOR_CONDENSED_SIG_LEN;
+	size_t computed_ladder_len;
 
-	assert(mtllib_key_from_buffer(buffer_no_ctx, buffer_no_ctx_size, &ctx) == MTLLIB_OK);
-	assert(ctx->algo_params == &sig_algos[6]);
-	assert(ctx->signature != NULL);
-	assert(ctx->secret_key != NULL);
-	assert(ctx->secret_key_len == 64);
-	assert(ctx->public_key != NULL);
-	assert(ctx->public_key_len == 32);
-	assert(ctx->mtl != NULL);
-	assert(ctx->mtl->ctx_str == NULL);
+	assert(mtllib_buffer_initialize(&key_buffer, key_buffer_len, key_buffer_bytes) == MTLLIB_OK);
+	assert(mtllib_key_from_buffer(key_buffer, &ctx) == MTLLIB_OK);
+	assert(mtllib_buffer_free(key_buffer) == MTLLIB_OK);	
+	assert(mtllib_buffer_initialize(&msg_buffer, msg_len, msg) == MTLLIB_OK);	
 
-	for (index = 0; index < 15; index++)
+	for (index = 0; index < num_messages; index++)
 	{
 		if (handle != NULL)
 		{
 			mtllib_sign_free_handle(&handle);
 			assert(handle == NULL);
 		}
-		assert(mtllib_sign_append(ctx, msg, msg_len, &handle) == MTLLIB_OK);
+		assert(mtllib_sign_append(ctx, msg_buffer, &handle) == MTLLIB_OK);
 		assert(&handle != NULL);
 		assert(handle->leaf_index == index);
-		assert(handle->sid_len == 8);
-		assert(memcmp(handle->sid, &sid_val[0], 8) == 0);
+		assert(handle->sid_len == 2*secparam);
+		assert(memcmp(handle->sid, &sid[0], 2*secparam) == 0);
 	}
 	mtllib_sign_free_handle(&handle);
 
+	computed_ladder_len = mtllib_sign_get_signed_ladder_length(ctx);
+	assert(computed_ladder_len == expected_ladder_len);
+	assert(mtllib_buffer_initialize(&ladder, computed_ladder_len, NULL) == MTLLIB_OK);
 	// 4 Rungs
-	assert(mtllib_sign_get_signed_ladder(ctx, &ladder, &ladder_len) == MTLLIB_OK);
-	// Signed ladder should be 12 byte header 4 rungs of 24 bytes 4 bytes signature length and signatures
-	assert(ladder_len == 12 + (4 * 24) + 4 + 7856); 
+	assert(mtllib_sign_get_signed_ladder(ctx, ladder) == MTLLIB_OK);
+	// Signed ladder should be 36 byte header (flags & sid & rung_count) 4 rungs of 24 bytes (address & hash) 4 bytes signature length and signatures
+	assert(ladder->buffer_length == expected_ladder_len);
+	assert(ladder->buffer_position == expected_ladder_len);
 
-	free(ladder);
+	mtllib_buffer_free(msg_buffer);
+	mtllib_buffer_free(ladder);
 	mtllib_key_free(ctx);
+	
 	return 0;
 }
 uint8_t mtltest_mtllib_sign_get_signed_ladder_null(void)
 {
 	MTLLIB_CTX *ctx = NULL;
 	MTL_HANDLE *handle = NULL;
-	size_t buffer_no_ctx_size = 153;
-	uint8_t sid_val[] = {0x32, 0x34, 0xf0, 0xf5, 0xbe, 0x58, 0xc4, 0xc6};
-	uint8_t msg[] = "Test Message";
-	size_t msg_len = 13;
+	uint8_t sid[] = MTL_TEST_VECTOR_SID;
+	size_t key_buffer_len = MTL_TEST_VECTOR_KEYBUFFER_LEN;
+	uint8_t key_buffer_bytes[] = MTL_TEST_VECTOR_KEYBUFFER;
+	uint8_t msg[] = MTL_TEST_VECTOR_MSG;
+	size_t msg_len = MTL_TEST_VECTOR_MSG_LEN;
+	size_t secparam = MTL_TEST_VECTOR_SCHEME_SECPARAM;
+	size_t num_messages = MTL_TEST_VECTOR_NUM_MESSAGES;
 	size_t index = 0;
-	uint8_t *ladder;
-	size_t ladder_len;
-	uint8_t buffer_no_ctx[] =
-		{0x00, 0x00, 0x00, 0x15, 0x53, 0x4c, 0x48, 0x2d, 0x44, 0x53, 0x41, 0x2d, 0x4d, 0x54, 0x4c, 0x2d,
-		 0x53, 0x48, 0x41, 0x32, 0x2d, 0x31, 0x32, 0x38, 0x53, 0x00, 0x00, 0x00, 0x40, 0x79, 0x11, 0xc8,
-		 0x41, 0x32, 0x11, 0x3a, 0x53, 0x86, 0x75, 0x37, 0xf4, 0x45, 0x4c, 0xf3, 0xa0, 0x40, 0x74, 0xab,
-		 0x4b, 0xb4, 0x82, 0x9e, 0x85, 0x1a, 0x77, 0x3e, 0xb8, 0xc0, 0x5e, 0x2b, 0x2c, 0x5c, 0x23, 0x57,
-		 0x30, 0x9a, 0x37, 0x07, 0xd1, 0x08, 0xfe, 0x5c, 0x31, 0xe5, 0xdc, 0xb4, 0xdc, 0xfa, 0xd1, 0x78,
-		 0xfc, 0xaa, 0x51, 0x16, 0xb6, 0x69, 0xb8, 0xb2, 0x63, 0x23, 0xd5, 0x56, 0x86, 0x00, 0x00, 0x00,
-		 0x20, 0x5c, 0x23, 0x57, 0x30, 0x9a, 0x37, 0x07, 0xd1, 0x08, 0xfe, 0x5c, 0x31, 0xe5, 0xdc, 0xb4,
-		 0xdc, 0xfa, 0xd1, 0x78, 0xfc, 0xaa, 0x51, 0x16, 0xb6, 0x69, 0xb8, 0xb2, 0x63, 0x23, 0xd5, 0x56,
-		 0x86, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x08, 0x32, 0x34, 0xf0, 0xf5, 0xbe,
-		 0x58, 0xc4, 0xc6, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10};
+	MTLLIB_BUFFER *key_buffer = NULL;
+	MTLLIB_BUFFER *ladder = NULL;
+	MTLLIB_BUFFER *msg_buffer = NULL;
+	size_t signed_ladder_length = MTL_TEST_VECTOR_FULL_SIG_LEN - MTL_TEST_VECTOR_CONDENSED_SIG_LEN;
 
-	assert(mtllib_key_from_buffer(buffer_no_ctx, buffer_no_ctx_size, &ctx) == MTLLIB_OK);
-	assert(ctx->algo_params == &sig_algos[6]);
-	assert(ctx->signature != NULL);
-	assert(ctx->secret_key != NULL);
-	assert(ctx->secret_key_len == 64);
-	assert(ctx->public_key != NULL);
-	assert(ctx->public_key_len == 32);
-	assert(ctx->mtl != NULL);
-	assert(ctx->mtl->ctx_str == NULL);
+	assert(mtllib_buffer_initialize(&ladder, signed_ladder_length, NULL) == MTLLIB_OK);
+	assert(mtllib_buffer_initialize(&key_buffer, key_buffer_len, key_buffer_bytes) == MTLLIB_OK);
+	assert(mtllib_key_from_buffer(key_buffer, &ctx) == MTLLIB_OK);
+	assert(mtllib_buffer_free(key_buffer) == MTLLIB_OK);
+	assert(mtllib_buffer_initialize(&msg_buffer, msg_len, msg) == MTLLIB_OK);
 
-	for (index = 0; index < 15; index++)
+	for (index = 0; index < num_messages; index++)
 	{
 		if (handle != NULL)
 		{
 			mtllib_sign_free_handle(&handle);
 			assert(handle == NULL);
 		}
-		assert(mtllib_sign_append(ctx, msg, msg_len, &handle) == MTLLIB_OK);
+		assert(mtllib_sign_append(ctx, msg_buffer, &handle) == MTLLIB_OK);
 		assert(&handle != NULL);
 		assert(handle->leaf_index == index);
-		assert(handle->sid_len == 8);
-		assert(memcmp(handle->sid, &sid_val[0], 8) == 0);
+		assert(handle->sid_len == 2*secparam);
+		assert(memcmp(handle->sid, &sid[0], 2*secparam) == 0);
 	}
 	mtllib_sign_free_handle(&handle);
 
-	assert(mtllib_sign_get_signed_ladder(NULL, &ladder, &ladder_len) == MTLLIB_NULL_PARAMS);
-	assert(ladder_len == 0); 
-	assert(mtllib_sign_get_signed_ladder(ctx, NULL, &ladder_len) == MTLLIB_NULL_PARAMS);
-	assert(ladder_len == 0); 
-	assert(mtllib_sign_get_signed_ladder(ctx, &ladder, NULL) == MTLLIB_NULL_PARAMS);
-	assert(ladder_len == 0); 
+	assert(mtllib_sign_get_signed_ladder(NULL, ladder) == MTLLIB_NULL_PARAMS);
+	assert(ladder->buffer_position == 0); 
+	assert(mtllib_sign_get_signed_ladder(ctx, NULL) == MTLLIB_NULL_PARAMS);
+	assert(ladder->buffer_position == 0); 
+	assert(mtllib_buffer_free(ladder) == MTLLIB_OK);
+	assert(mtllib_buffer_initialize(&ladder, 1, NULL) == MTLLIB_OK);
+	assert(mtllib_sign_get_signed_ladder(ctx, ladder) == MTLLIB_BUFFER_ISSUE);
+	assert(ladder->buffer_position == 0); 
 
+	mtllib_buffer_free(msg_buffer);
+	mtllib_buffer_free(ladder);
 	mtllib_key_free(ctx);
+	
 	return 0;
 }
 uint8_t mtltest_mtllib_sign_get_full_sig(void)
 {
 	MTLLIB_CTX *ctx = NULL;
 	MTL_HANDLE *handle = NULL;
-	size_t buffer_no_ctx_size = 153;
-	uint8_t sid_val[] = {0x32, 0x34, 0xf0, 0xf5, 0xbe, 0x58, 0xc4, 0xc6};
-	uint8_t msg[] = "Test Message";
-	size_t msg_len = 13;
+	uint8_t sid[] = MTL_TEST_VECTOR_SID;
+	size_t key_buffer_len = MTL_TEST_VECTOR_KEYBUFFER_LEN;
+	uint8_t key_buffer_bytes[] = MTL_TEST_VECTOR_KEYBUFFER;
+	uint8_t msg[] = MTL_TEST_VECTOR_MSG;
+	size_t msg_len = MTL_TEST_VECTOR_MSG_LEN;
+	size_t secparam = MTL_TEST_VECTOR_SCHEME_SECPARAM;
+	size_t num_messages = MTL_TEST_VECTOR_NUM_MESSAGES;
 	size_t index = 0;
-	uint8_t *sig;
-	size_t siglen;
-	uint8_t buffer_no_ctx[] =
-		{0x00, 0x00, 0x00, 0x15, 0x53, 0x4c, 0x48, 0x2d, 0x44, 0x53, 0x41, 0x2d, 0x4d, 0x54, 0x4c, 0x2d,
-		 0x53, 0x48, 0x41, 0x32, 0x2d, 0x31, 0x32, 0x38, 0x53, 0x00, 0x00, 0x00, 0x40, 0x79, 0x11, 0xc8,
-		 0x41, 0x32, 0x11, 0x3a, 0x53, 0x86, 0x75, 0x37, 0xf4, 0x45, 0x4c, 0xf3, 0xa0, 0x40, 0x74, 0xab,
-		 0x4b, 0xb4, 0x82, 0x9e, 0x85, 0x1a, 0x77, 0x3e, 0xb8, 0xc0, 0x5e, 0x2b, 0x2c, 0x5c, 0x23, 0x57,
-		 0x30, 0x9a, 0x37, 0x07, 0xd1, 0x08, 0xfe, 0x5c, 0x31, 0xe5, 0xdc, 0xb4, 0xdc, 0xfa, 0xd1, 0x78,
-		 0xfc, 0xaa, 0x51, 0x16, 0xb6, 0x69, 0xb8, 0xb2, 0x63, 0x23, 0xd5, 0x56, 0x86, 0x00, 0x00, 0x00,
-		 0x20, 0x5c, 0x23, 0x57, 0x30, 0x9a, 0x37, 0x07, 0xd1, 0x08, 0xfe, 0x5c, 0x31, 0xe5, 0xdc, 0xb4,
-		 0xdc, 0xfa, 0xd1, 0x78, 0xfc, 0xaa, 0x51, 0x16, 0xb6, 0x69, 0xb8, 0xb2, 0x63, 0x23, 0xd5, 0x56,
-		 0x86, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x08, 0x32, 0x34, 0xf0, 0xf5, 0xbe,
-		 0x58, 0xc4, 0xc6, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10};
+	MTLLIB_BUFFER *key_buffer = NULL;
+	MTLLIB_BUFFER *sig = NULL;
+	MTLLIB_BUFFER *msg_buffer = NULL;
+	size_t expected_siglen = MTL_TEST_VECTOR_FULL_SIG_LEN;
+	size_t computed_siglen;
 
-	assert(mtllib_key_from_buffer(buffer_no_ctx, buffer_no_ctx_size, &ctx) == MTLLIB_OK);
-	assert(ctx->algo_params == &sig_algos[6]);
-	assert(ctx->signature != NULL);
-	assert(ctx->secret_key != NULL);
-	assert(ctx->secret_key_len == 64);
-	assert(ctx->public_key != NULL);
-	assert(ctx->public_key_len == 32);
-	assert(ctx->mtl != NULL);
-	assert(ctx->mtl->ctx_str == NULL);
+	assert(mtllib_buffer_initialize(&key_buffer, key_buffer_len, key_buffer_bytes) == MTLLIB_OK);
+	assert(mtllib_key_from_buffer(key_buffer, &ctx) == MTLLIB_OK);
+	assert(mtllib_buffer_initialize(&msg_buffer, msg_len, msg) == MTLLIB_OK);
 
-	for (index = 0; index < 15; index++)
+	for (index = 0; index < num_messages; index++)
 	{
 		if (handle != NULL)
 		{
 			mtllib_sign_free_handle(&handle);
 			assert(handle == NULL);
 		}
-		assert(mtllib_sign_append(ctx, msg, msg_len, &handle) == MTLLIB_OK);
+		assert(mtllib_sign_append(ctx, msg_buffer, &handle) == MTLLIB_OK);
 		assert(&handle != NULL);
 		assert(handle->leaf_index == index);
-		assert(handle->sid_len == 8);
-		assert(memcmp(handle->sid, &sid_val[0], 8) == 0);
+		assert(handle->sid_len == 2*secparam);
+		assert(memcmp(handle->sid, &sid[0], 2*secparam) == 0);
 	}
 
-	handle->leaf_index = 5;
-	assert(mtllib_sign_get_full_sig(ctx, handle, &sig, &siglen) == MTLLIB_OK);
-	// Condensed signature should 24 bytes plus num hashes * 16
-	// Signed ladder should be 12 byte header 4 rungs of 24 bytes 4 bytes signature length and signatures
-	assert(siglen == (24 + (4 * 16)) + (12 + (4 * 24) + 4 + 7856)); 
+	handle->leaf_index = 13;
 
+	computed_siglen = mtllib_sign_get_full_sig_length(ctx, handle);
+	assert(computed_siglen == expected_siglen);
+	assert(mtllib_buffer_initialize(&sig, computed_siglen, NULL) == MTLLIB_OK);
+	assert(mtllib_sign_get_full_sig(ctx, handle, sig) == MTLLIB_OK);
+	assert(sig->buffer_position == expected_siglen); 
+
+	mtllib_buffer_free(msg_buffer);
+	mtllib_buffer_free(sig);
+	mtllib_buffer_free(key_buffer);
 	mtllib_sign_free_handle(&handle);
 	mtllib_key_free(ctx);
 	return 0;
@@ -871,34 +830,22 @@ uint8_t mtltest_mtllib_sign_get_full_sig_null(void)
 {
 	MTLLIB_CTX *ctx = NULL;
 	MTL_HANDLE *handle = NULL;
-	size_t buffer_no_ctx_size = 153;
-	uint8_t sid_val[] = {0x32, 0x34, 0xf0, 0xf5, 0xbe, 0x58, 0xc4, 0xc6};
-	uint8_t msg[] = "Test Message";
-	size_t msg_len = 13;
+	uint8_t sid[] = MTL_TEST_VECTOR_SID;
+	size_t key_buffer_len = MTL_TEST_VECTOR_KEYBUFFER_LEN;
+	uint8_t key_buffer_bytes[] = MTL_TEST_VECTOR_KEYBUFFER;
+	uint8_t msg[] = MTL_TEST_VECTOR_MSG;
+	size_t msg_len = MTL_TEST_VECTOR_MSG_LEN;
+	size_t secparam = MTL_TEST_VECTOR_SCHEME_SECPARAM;
 	size_t index = 0;
-	uint8_t *sig;
-	size_t siglen;
-	uint8_t buffer_no_ctx[] =
-		{0x00, 0x00, 0x00, 0x15, 0x53, 0x4c, 0x48, 0x2d, 0x44, 0x53, 0x41, 0x2d, 0x4d, 0x54, 0x4c, 0x2d,
-		 0x53, 0x48, 0x41, 0x32, 0x2d, 0x31, 0x32, 0x38, 0x53, 0x00, 0x00, 0x00, 0x40, 0x79, 0x11, 0xc8,
-		 0x41, 0x32, 0x11, 0x3a, 0x53, 0x86, 0x75, 0x37, 0xf4, 0x45, 0x4c, 0xf3, 0xa0, 0x40, 0x74, 0xab,
-		 0x4b, 0xb4, 0x82, 0x9e, 0x85, 0x1a, 0x77, 0x3e, 0xb8, 0xc0, 0x5e, 0x2b, 0x2c, 0x5c, 0x23, 0x57,
-		 0x30, 0x9a, 0x37, 0x07, 0xd1, 0x08, 0xfe, 0x5c, 0x31, 0xe5, 0xdc, 0xb4, 0xdc, 0xfa, 0xd1, 0x78,
-		 0xfc, 0xaa, 0x51, 0x16, 0xb6, 0x69, 0xb8, 0xb2, 0x63, 0x23, 0xd5, 0x56, 0x86, 0x00, 0x00, 0x00,
-		 0x20, 0x5c, 0x23, 0x57, 0x30, 0x9a, 0x37, 0x07, 0xd1, 0x08, 0xfe, 0x5c, 0x31, 0xe5, 0xdc, 0xb4,
-		 0xdc, 0xfa, 0xd1, 0x78, 0xfc, 0xaa, 0x51, 0x16, 0xb6, 0x69, 0xb8, 0xb2, 0x63, 0x23, 0xd5, 0x56,
-		 0x86, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x08, 0x32, 0x34, 0xf0, 0xf5, 0xbe,
-		 0x58, 0xc4, 0xc6, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10};
-
-	assert(mtllib_key_from_buffer(buffer_no_ctx, buffer_no_ctx_size, &ctx) == MTLLIB_OK);
-	assert(ctx->algo_params == &sig_algos[6]);
-	assert(ctx->signature != NULL);
-	assert(ctx->secret_key != NULL);
-	assert(ctx->secret_key_len == 64);
-	assert(ctx->public_key != NULL);
-	assert(ctx->public_key_len == 32);
-	assert(ctx->mtl != NULL);
-	assert(ctx->mtl->ctx_str == NULL);
+	MTLLIB_BUFFER *key_buffer = NULL;
+	MTLLIB_BUFFER *sig = NULL;
+	MTLLIB_BUFFER *msg_buffer = NULL;
+	size_t expected_siglen = MTL_TEST_VECTOR_FULL_SIG_LEN;
+	
+	assert(mtllib_buffer_initialize(&key_buffer, key_buffer_len, key_buffer_bytes) == MTLLIB_OK);
+	assert(mtllib_key_from_buffer(key_buffer, &ctx) == MTLLIB_OK);
+	assert(mtllib_buffer_initialize(&msg_buffer, msg_len, msg) == MTLLIB_OK);
+	assert(mtllib_buffer_initialize(&sig, expected_siglen, NULL) == MTLLIB_OK);
 
 	for (index = 0; index < 15; index++)
 	{
@@ -907,222 +854,398 @@ uint8_t mtltest_mtllib_sign_get_full_sig_null(void)
 			mtllib_sign_free_handle(&handle);
 			assert(handle == NULL);
 		}
-		assert(mtllib_sign_append(ctx, msg, msg_len, &handle) == MTLLIB_OK);
+		assert(mtllib_sign_append(ctx, msg_buffer, &handle) == MTLLIB_OK);
 		assert(&handle != NULL);
 		assert(handle->leaf_index == index);
-		assert(handle->sid_len == 8);
-		assert(memcmp(handle->sid, &sid_val[0], 8) == 0);
+		assert(handle->sid_len == 2*secparam);
+		assert(memcmp(handle->sid, &sid[0], 2*secparam) == 0);
 	}
 
 	handle->leaf_index = 5;
-	assert(mtllib_sign_get_full_sig(NULL, handle, &sig, &siglen) == MTLLIB_NULL_PARAMS);
-	assert(siglen == 0);
-	assert(mtllib_sign_get_full_sig(ctx, NULL, &sig, &siglen) == MTLLIB_NULL_PARAMS);
-	assert(siglen == 0);
-	assert(mtllib_sign_get_full_sig(ctx, handle, NULL, &siglen) == MTLLIB_NULL_PARAMS);
-	assert(siglen == 0);
-	assert(mtllib_sign_get_full_sig(ctx, handle, &sig, NULL) == MTLLIB_NULL_PARAMS);
-	assert(siglen == 0);
+	assert(mtllib_sign_get_full_sig(NULL, handle, sig) == MTLLIB_NULL_PARAMS);
+	assert(sig->buffer_position == 0);
+	assert(mtllib_sign_get_full_sig(ctx, NULL, sig) == MTLLIB_NULL_PARAMS);
+	assert(sig->buffer_position == 0);
+	assert(mtllib_sign_get_full_sig(ctx, handle, NULL) == MTLLIB_NULL_PARAMS);
+	assert(sig->buffer_position == 0);
+	mtllib_buffer_free(sig);
+	assert(mtllib_buffer_initialize(&sig, 1, NULL) == MTLLIB_OK);
+	assert(mtllib_sign_get_full_sig(ctx, handle, sig) == MTLLIB_BUFFER_ISSUE);
+	assert(sig->buffer_position == 0);
 
+	mtllib_buffer_free(msg_buffer);
+	mtllib_buffer_free(sig);
+	mtllib_buffer_free(key_buffer);
 	mtllib_sign_free_handle(&handle);
 	mtllib_key_free(ctx);
+	
 	return 0;
 }
 
 uint8_t mtltest_mtllib_verify_condensed(void) {
 	MTLLIB_CTX *ctx = NULL;
-	size_t sid_len = 8;
-	size_t pubkey_len = 32;
-	size_t msg_len = 10;
-	size_t authpath_len = 88;
-	size_t ladder_len = 60;
+	uint8_t sid[] = MTL_TEST_VECTOR_SID;
+	uint8_t pubkey[] = MTL_TEST_VECTOR_PUBKEY;
+	size_t pubkey_len = MTL_TEST_VECTOR_PUBKEY_LEN;
+	size_t authpath_len = MTL_TEST_VECTOR_CONDENSED_SIG_LEN;
+	uint8_t authpath_raw[] = MTL_TEST_VECTOR_CONDENSED_SIG;
+	uint8_t authpath_ctx_raw[] = MTL_TEST_VECTOR_CONDENSED_SIG_CTX;
+	size_t unsigned_ladder_len = MTL_TEST_VECTOR_UNSIGNED_LADDER_LEN;
+	uint8_t unsigned_ladder_raw[] = MTL_TEST_VECTOR_UNSIGNED_LADDER;
+	uint8_t unsigned_ladder_ctx_raw[] = MTL_TEST_VECTOR_UNSIGNED_LADDER_CTX;
+
 	size_t condensed_len = 0;
+	uint8_t msg_raw[] = MTL_TEST_VECTOR_MSG;
+	uint8_t msg_len = MTL_TEST_VECTOR_MSG_LEN;
+	uint8_t ctx_raw[] = MTL_TEST_VECTOR_CTX;
+	uint8_t ctx_len = MTL_TEST_VECTOR_CTX_LEN;
 
-	uint8_t sid[] = {0xc8,0x16,0x74,0x20,0x6e,0x20,0x0f,0x1f};
-	uint8_t pubkey[] = {
-		0x16,0xcf,0x45,0x42,0x09,0x53,0xe2,0x41,0xbd,0x0b,0x20,0xac,0x2f,0xa5,0xe4,0xbe,0x93,0x10,0xb0,0xec,0xaa,0x98,0x7e,0x6e,0xc2,0x80,0xbb,0xb7,0xc4,0xea,0xa3,0xfa};
-	uint8_t msg[] = {0x45,0xc9,0xd2,0x7a,0xc1,0x7f,0xe9,0x6c,0xef,0x29};
-	uint8_t unsigned_ladder[] = {
-		0x00,0x00,0xc8,0x16,0x74,0x20,0x6e,0x20,0x0f,0x1f,0x00,0x02,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x07,0x7b,0xb9,0x79,0x82,0x25,0x8b,0x52,0xac,0x9c,0x28,0x58,0x8f,
-		0xfe,0x5b,0xe4,0x03,0x00,0x00,0x00,0x08,0x00,0x00,0x00,0x09,0x13,0x02,0x53,0x2b,0xc5,0x4c,0x1b,0x8e,0xe3,0x4b,0x4a,0xbe,0xfd,0xb3,0xa4,0x28};
-	uint8_t authpath[] = {
-		0x21,0x7d,0x59,0xd0,0x48,0xab,0x5d,0xa4,0x39,0x17,0xf8,0xf2,0xe9,0x60,0xd2,0x5f,0x00,0x00,0xc8,0x16,0x74,0x20,0x6e,0x20,0x0f,0x1f,0x00,0x00,0x00,0x00,0x00,0x00,
-		0x00,0x00,0x00,0x00,0x00,0x07,0x00,0x03,0x01,0xf8,0x51,0x87,0x18,0xd9,0xff,0x2a,0x73,0x87,0x60,0x73,0x96,0xf7,0x96,0x50,0x81,0x18,0x47,0x6d,0xe0,0xaa,0xbf,0x66,
-		0x83,0xa6,0x93,0x9a,0x13,0x15,0x5a,0xaa,0xf7,0x0d,0x63,0x98,0x8d,0x10,0x97,0xc8,0x50,0x71,0x9a,0x92,0x87,0x40,0xc9,0x2b};
+	MTLLIB_BUFFER *pubkey_buffer = NULL;
+	MTLLIB_BUFFER *msg = NULL;
+	MTLLIB_BUFFER *ctx_str = NULL;
+	MTLLIB_BUFFER *sig = NULL;
+	MTLLIB_BUFFER *unsigned_ladder = NULL;
+	assert(mtllib_buffer_initialize(&msg, msg_len, msg_raw) == MTLLIB_OK);
+	assert(mtllib_buffer_initialize(&sig, authpath_len, authpath_raw) == MTLLIB_OK);
+	assert(mtllib_buffer_initialize(&unsigned_ladder, unsigned_ladder_len, unsigned_ladder_raw) == MTLLIB_OK);
 
-
-	assert(mtllib_key_pubkey_from_params("SLH-DSA-MTL-SHA2-128S", &ctx, NULL, pubkey, pubkey_len, sid, sid_len) == MTLLIB_OK);
+	assert(mtllib_buffer_initialize(&pubkey_buffer, pubkey_len, pubkey) == MTLLIB_OK);
+	assert(mtllib_pubkey_from_buffer(MTL_TEST_VECTOR_SCHEME_NAME, &ctx, pubkey_buffer, sid) == MTLLIB_OK);
 		
-	assert(mtllib_verify(ctx, msg, msg_len, authpath, authpath_len, unsigned_ladder, ladder_len, &condensed_len) == MTLLIB_OK);
-	assert(condensed_len == 88);
-	assert(mtllib_verify(ctx, msg, msg_len, authpath, authpath_len, unsigned_ladder, ladder_len, NULL) == MTLLIB_OK);
+	assert(mtllib_verify(ctx, msg, sig, unsigned_ladder, &condensed_len) == MTLLIB_OK);
+	assert(condensed_len == authpath_len);
+	assert(mtllib_verify(ctx, msg, sig, unsigned_ladder, NULL) == MTLLIB_OK);
 
+	mtllib_buffer_free(sig);
+	mtllib_buffer_free(unsigned_ladder);
+
+	// Re-test with ctx_str
+	assert(mtllib_buffer_initialize(&ctx_str, ctx_len, ctx_raw) == MTLLIB_OK);
+	assert(mtllib_buffer_initialize(&sig, authpath_len, authpath_ctx_raw) == MTLLIB_OK);
+	assert(mtllib_buffer_initialize(&unsigned_ladder, unsigned_ladder_len, unsigned_ladder_ctx_raw) == MTLLIB_OK);
+
+	assert(mtllib_verify_with_ctx_str(ctx, msg, ctx_str, sig, unsigned_ladder, &condensed_len) == MTLLIB_OK);
+	assert(condensed_len == authpath_len);
+	assert(mtllib_verify_with_ctx_str(ctx, msg, ctx_str, sig, unsigned_ladder, NULL) == MTLLIB_OK);
+
+	/* Reject if no ctx_str */
+	assert(mtllib_verify(ctx, msg, sig, unsigned_ladder, &condensed_len) == MTLLIB_NO_LADDER);
+	assert(mtllib_verify(ctx, msg, sig, unsigned_ladder, NULL) == MTLLIB_NO_LADDER);
+	/* Reject if wrong ctx_str */
+	mtllib_buffer_data_ptr(ctx_str)[mtllib_buffer_in_use(ctx_str)/2]++;
+	assert(mtllib_verify_with_ctx_str(ctx, msg, ctx_str, sig, unsigned_ladder, &condensed_len) == MTLLIB_NO_LADDER);
+	assert(mtllib_verify_with_ctx_str(ctx, msg, ctx_str, sig, unsigned_ladder, NULL) == MTLLIB_NO_LADDER);
+
+	mtllib_key_free(ctx);
+	mtllib_buffer_free(pubkey_buffer);
+	mtllib_buffer_free(msg);
+	mtllib_buffer_free(sig);
+	mtllib_buffer_free(ctx_str);
+	mtllib_buffer_free(unsigned_ladder);
 	return 0;
 }
 
 uint8_t mtltest_mtllib_verify_condensed_no_ladder(void) {
 	MTLLIB_CTX *ctx = NULL;
-	uint8_t pubkey[] = {0x99,0xe3,0xfe,0x4d,0x91,0xf6,0xbc,0xd4,
-						0xa7,0x09,0x1c,0xb0,0x7a,0x1c,0x4e,0xa4,
-						0xa8,0xf8,0x4a,0x08,0x2e,0x61,0xe3,0xb2,
-						0xf2,0x75,0x9a,0x33,0xf8,0xf3,0xe8,0xcf};
-	uint8_t sid[] = {0xd7,0xa0,0x4d,0x7e,0x55,0x2a,0x23,0x3c};
-	size_t sid_len = 8;
-	size_t authpath_len = 56;
-	uint8_t authpath[] = {
-		                0x22,0x2d,0xd5,0x0a,0x78,0xf4,0xbd,0xad,
-						0x96,0xce,0x5e,0x48,0xd8,0xb0,0x31,0xef,
-						0x00,0x00,0xd7,0xa0,0x4d,0x7e,0x55,0x2a,
-						0x23,0x3c,0x00,0x00,0x00,0x09,0x00,0x00,
-						0x00,0x08,0x00,0x00,0x00,0x09,0x00,0x01,
-						0x32,0x3a,0xd3,0x04,0xa5,0x21,0x37,0x21,
-						0x98,0xcf,0x49,0x73,0x92,0x98,0x4f,0x51};
-	size_t msg_len = 10;
-	uint8_t msg[] = {0xb4,0x5b,0xc0,0x68,0xc9,0xfb,0x7c,0x2a,0x49,0xd8};
+	uint8_t sid[] = MTL_TEST_VECTOR_SID;
+	uint8_t pubkey[] = MTL_TEST_VECTOR_PUBKEY;
+	size_t pubkey_len = MTL_TEST_VECTOR_PUBKEY_LEN;
+	size_t authpath_len = MTL_TEST_VECTOR_CONDENSED_SIG_LEN;
+	uint8_t authpath_raw[] = MTL_TEST_VECTOR_CONDENSED_SIG;
+
+	uint8_t msg_len = MTL_TEST_VECTOR_MSG_LEN;
+	uint8_t msg_raw[] = MTL_TEST_VECTOR_MSG;
+
 	size_t condensed_len = 0;
+	MTLLIB_BUFFER *pubkey_buffer = NULL;
+	MTLLIB_BUFFER *msg = NULL;
+	MTLLIB_BUFFER *sig = NULL;
+	assert(mtllib_buffer_initialize(&msg, msg_len, msg_raw) == MTLLIB_OK);
+	assert(mtllib_buffer_initialize(&sig, authpath_len, authpath_raw) == MTLLIB_OK);
 
+	assert(mtllib_buffer_initialize(&pubkey_buffer, pubkey_len, pubkey) == MTLLIB_OK);
 	memset(&sid[0], 0x55, 8);
-	assert(mtllib_key_pubkey_from_params("SLH-DSA-MTL-SHAKE-128F", &ctx, NULL, pubkey, 32, sid, sid_len) == MTLLIB_OK);
+	assert(mtllib_pubkey_from_buffer(MTL_TEST_VECTOR_SCHEME_NAME, &ctx, pubkey_buffer, sid) == MTLLIB_OK);
 		
-	assert(mtllib_verify(ctx, msg, msg_len, authpath, authpath_len, NULL, 0, NULL) == MTLLIB_NO_LADDER);
-	assert(mtllib_verify(ctx, msg, msg_len, authpath, authpath_len, NULL, 0, &condensed_len) == MTLLIB_NO_LADDER);
-	assert(condensed_len == 56);
+	assert(mtllib_verify(ctx, msg, sig, NULL, NULL) == MTLLIB_NO_LADDER);
+	assert(mtllib_verify(ctx, msg, sig, NULL, &condensed_len) == MTLLIB_NO_LADDER);
+	assert(condensed_len == authpath_len);
 
+	mtllib_key_free(ctx);
+	mtllib_buffer_free(pubkey_buffer);
+	mtllib_buffer_free(msg);
+	mtllib_buffer_free(sig);
 	return 0;
 }
 
 uint8_t mtltest_mtllib_verify_full(void) {
 	MTLLIB_CTX *ctx = NULL;
-	size_t sid_len = 8;
-	size_t pubkey_len = 32;
-	size_t msg_len = 10;
-	size_t full_signature_len = MTL_TEST_FULL_SIGNATURE_SLH_DSA_MTL_SHAKE_128S_LEN;
+	uint8_t sid[] = MTL_TEST_VECTOR_SID;
+	size_t pubkey_len = MTL_TEST_VECTOR_PUBKEY_LEN;
+	uint8_t pubkey[] = MTL_TEST_VECTOR_PUBKEY;
+	size_t msg_len = MTL_TEST_VECTOR_MSG_LEN;
+	uint8_t msg_raw[] = MTL_TEST_VECTOR_MSG;
+	size_t ctx_str_len = MTL_TEST_VECTOR_CTX_LEN;
+	uint8_t ctx_str_raw[] = MTL_TEST_VECTOR_CTX;
+
+	size_t full_signature_len = MTL_TEST_VECTOR_FULL_SIG_LEN;
+	uint8_t full_signature_raw[] = MTL_TEST_VECTOR_FULL_SIG;
+	uint8_t full_signature_ctx_raw[] = MTL_TEST_VECTOR_FULL_SIG_CTX;
+	size_t expected_condensed_len = MTL_TEST_VECTOR_CONDENSED_SIG_LEN;
 	size_t condensed_len = 0;
+	MTLLIB_BUFFER *pubkey_buffer = NULL;
+	MTLLIB_BUFFER *msg = NULL;
+	MTLLIB_BUFFER *sig = NULL;
+	MTLLIB_BUFFER *ctx_str = NULL;
 
+	size_t authpath_leaf_index_offset = 42;
 
-	uint8_t sid[] = {0x47,0x2a,0xf5,0xd9,0xb1,0x31,0xa6,0x8d};
-	uint8_t pubkey[] = {
-		0x97,0x76,0x59,0x93,0xf9,0xf5,0x1a,0xbc,0xcc,0xa2,0xae,0xde,0xe0,0x83,0xb7,0x86,0x92,0xf2,0xd1,0x01,0xcf,0xc1,0xff,0xd5,0xfc,0xe6,0xb1,0x26,0xf9,0x04,0xe7,0x36};
-	uint8_t msg[] = {0x28,0x12,0x80,0x0f,0xe0,0xea,0xc4,0xe6,0x0c,0xe4};
-	uint8_t full_signature[] = MTL_TEST_FULL_SIGNATURE_SLH_DSA_MTL_SHAKE_128S_BYTES;
-
-	assert(mtllib_key_pubkey_from_params("SLH-DSA-MTL-SHAKE-128S", &ctx, NULL, pubkey, pubkey_len, sid, sid_len) == MTLLIB_OK);
+	assert(mtllib_buffer_initialize(&msg, msg_len, msg_raw) == MTLLIB_OK);
+	assert(mtllib_buffer_initialize(&sig, full_signature_len, full_signature_raw) == MTLLIB_OK);
+	assert(mtllib_buffer_initialize(&pubkey_buffer, pubkey_len, pubkey) == MTLLIB_OK);
+	assert(mtllib_pubkey_from_buffer(MTL_TEST_VECTOR_SCHEME_NAME, &ctx, pubkey_buffer, sid) == MTLLIB_OK);
 		
-	assert(mtllib_verify(ctx, msg, msg_len, full_signature, full_signature_len, NULL, 0, NULL) == MTLLIB_OK);
-	assert(mtllib_verify(ctx, msg, msg_len, full_signature, full_signature_len, NULL, 0, &condensed_len) == MTLLIB_OK);
-	assert(condensed_len == 88);
+	assert(mtllib_verify(ctx, msg, sig, NULL, NULL) == MTLLIB_OK_VALIDATED_LADDER);
+	assert(mtllib_verify(ctx, msg, sig, NULL, &condensed_len) == MTLLIB_OK_VALIDATED_LADDER);
+	assert(condensed_len == expected_condensed_len);
 
+	/* underlying signature failure */
+	mtllib_buffer_data_ptr(sig)[full_signature_len-1]++;
+	assert(mtllib_verify(ctx, msg, sig, NULL, NULL) == MTLLIB_BOGUS_CRYPTO);
+	mtllib_buffer_data_ptr(sig)[full_signature_len-1]--;
+
+	/* bad reconstruction */
+	memset(mtllib_buffer_data_ptr(sig)+authpath_leaf_index_offset, 0, 3*MTL_INDEX_LEN); // set leaf and target to node [0:0]
+	assert(mtllib_verify(ctx, msg, sig, NULL, NULL) == MTLLIB_BOGUS_CRYPTO);
+
+
+	// Re-test with ctx_str
+	mtllib_buffer_free(sig);
+	assert(mtllib_buffer_initialize(&ctx_str, ctx_str_len, ctx_str_raw) == MTLLIB_OK);
+	assert(mtllib_buffer_initialize(&sig, full_signature_len, full_signature_ctx_raw) == MTLLIB_OK);
+
+	assert(mtllib_verify_with_ctx_str(ctx, msg, ctx_str, sig, NULL, NULL) == MTLLIB_OK_VALIDATED_LADDER);
+	assert(mtllib_verify_with_ctx_str(ctx, msg, ctx_str, sig, NULL, &condensed_len) == MTLLIB_OK_VALIDATED_LADDER);
+	assert(condensed_len == expected_condensed_len);
+
+	/* Reject if no ctx_str */
+	assert(mtllib_verify(ctx, msg, sig, NULL, NULL) == MTLLIB_BOGUS_CRYPTO);
+	assert(mtllib_verify(ctx, msg, sig, NULL, &condensed_len) == MTLLIB_BOGUS_CRYPTO);
+	/* Reject if wrong ctx_str */
+	mtllib_buffer_data_ptr(ctx_str)[mtllib_buffer_in_use(ctx_str)/2]++;
+	assert(mtllib_verify(ctx, msg, sig, NULL, NULL) == MTLLIB_BOGUS_CRYPTO);
+	assert(mtllib_verify(ctx, msg, sig, NULL, &condensed_len) == MTLLIB_BOGUS_CRYPTO);
+	mtllib_buffer_data_ptr(ctx_str)[mtllib_buffer_in_use(ctx_str)/2]--;
+
+	/* underlying signature failure */
+	mtllib_buffer_data_ptr(sig)[full_signature_len-1]++;
+	assert(mtllib_verify(ctx, msg, sig, NULL, NULL) == MTLLIB_BOGUS_CRYPTO);
+	mtllib_buffer_data_ptr(sig)[full_signature_len-1]--;
+
+	/* bad reconstruction */
+	memset(mtllib_buffer_data_ptr(sig)+authpath_leaf_index_offset, 0, 3*MTL_INDEX_LEN); // set leaf and target to node [0:0]
+	assert(mtllib_verify(ctx, msg, sig, NULL, NULL) == MTLLIB_BOGUS_CRYPTO);
+
+	mtllib_key_free(ctx);
+	mtllib_buffer_free(pubkey_buffer);
+	mtllib_buffer_free(msg);
+	mtllib_buffer_free(sig);
+	mtllib_buffer_free(ctx_str);
 	return 0;
 }
 
 uint8_t mtltest_mtllib_verify_null(void) {
-	uint8_t unsigned_ladder[] = {
-		0x00,0x00,0xd7,0xa0,0x4d,0x7e,0x55,0x2a,0x23,0x3c,0x00,0x02,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x07,0x32,0xa1,0x6f,0x14,0xaa,0xe8,0x2c,0x5b,0xd6,0x33,0xf5,0xc2,
-		0x29,0xf9,0xf8,0xb3,0x00,0x00,0x00,0x08,0x00,0x00,0x00,0x09,0x5f,0x0a,0xe9,0x8b,0xca,0x0f,0x0d,0x23,0xc1,0xf8,0x70,0x7b,0x43,0xd2,0x09,0xc9};
 	MTLLIB_CTX *ctx = NULL;
-	uint8_t pubkey[] = {0x99,0xe3,0xfe,0x4d,0x91,0xf6,0xbc,0xd4,
-						0xa7,0x09,0x1c,0xb0,0x7a,0x1c,0x4e,0xa4,
-						0xa8,0xf8,0x4a,0x08,0x2e,0x61,0xe3,0xb2,
-						0xf2,0x75,0x9a,0x33,0xf8,0xf3,0xe8,0xcf};
-	uint8_t sid[] = {0xd7,0xa0,0x4d,0x7e,0x55,0x2a,0x23,0x3c};
-	size_t sid_len = 8;
-	size_t authpath_len = 56;
-	uint8_t authpath[] = {
-		                0x22,0x2d,0xd5,0x0a,0x78,0xf4,0xbd,0xad,
-						0x96,0xce,0x5e,0x48,0xd8,0xb0,0x31,0xef,
-						0x00,0x00,0xd7,0xa0,0x4d,0x7e,0x55,0x2a,
-						0x23,0x3c,0x00,0x00,0x00,0x09,0x00,0x00,
-						0x00,0x08,0x00,0x00,0x00,0x09,0x00,0x01,
-						0x32,0x3a,0xd3,0x04,0xa5,0x21,0x37,0x21,
-						0x98,0xcf,0x49,0x73,0x92,0x98,0x4f,0x51};
-	size_t msg_len = 10;
-	uint8_t msg[] = {0xb4,0x5b,0xc0,0x68,0xc9,0xfb,0x7c,0x2a,0x49,0xd8};
+	uint8_t sid[] = MTL_TEST_VECTOR_SID;
+	size_t pubkey_len = MTL_TEST_VECTOR_PUBKEY_LEN;
+	uint8_t pubkey[] = MTL_TEST_VECTOR_PUBKEY;
+	size_t msg_len = MTL_TEST_VECTOR_MSG_LEN;
+	uint8_t msg_raw[] = MTL_TEST_VECTOR_MSG;
+	size_t unsigned_ladder_len = MTL_TEST_VECTOR_UNSIGNED_LADDER_LEN;
+	uint8_t unsigned_ladder_raw[] = MTL_TEST_VECTOR_UNSIGNED_LADDER;
+	size_t authpath_len = MTL_TEST_VECTOR_CONDENSED_SIG_LEN;
+	uint8_t authpath_raw[] = MTL_TEST_VECTOR_CONDENSED_SIG;
+	MTLLIB_BUFFER *pubkey_buffer = NULL;
+	MTLLIB_BUFFER *msg = NULL;
+	MTLLIB_BUFFER *authpath = NULL;
+	MTLLIB_BUFFER *unsigned_ladder = NULL;
 
-	memset(&sid[0], 0x55, 8);
-	assert(mtllib_key_pubkey_from_params("SLH-DSA-MTL-SHAKE-128F", &ctx, NULL, pubkey, 32, sid, sid_len) == MTLLIB_OK);
 
-	assert(mtllib_verify(NULL, msg, msg_len, authpath, authpath_len, unsigned_ladder, 60, NULL) == MTLLIB_NULL_PARAMS);
-	assert(mtllib_verify(ctx, NULL, msg_len, authpath, authpath_len, unsigned_ladder, 60, NULL) == MTLLIB_NULL_PARAMS);
-	assert(mtllib_verify(ctx, msg, msg_len, NULL, authpath_len, unsigned_ladder, 60, NULL) == MTLLIB_NULL_PARAMS);
+	assert(mtllib_buffer_initialize(&pubkey_buffer, pubkey_len, pubkey) == MTLLIB_OK);
+	assert(mtllib_buffer_initialize(&msg, msg_len, msg_raw) == MTLLIB_OK);
+	assert(mtllib_buffer_initialize(&authpath, authpath_len, authpath_raw) == MTLLIB_OK);
+	assert(mtllib_buffer_initialize(&unsigned_ladder, unsigned_ladder_len, unsigned_ladder_raw) == MTLLIB_OK);
+	assert(mtllib_pubkey_from_buffer(MTL_TEST_VECTOR_SCHEME_NAME, &ctx, pubkey_buffer, sid) == MTLLIB_OK);
 
+	assert(mtllib_verify(NULL, msg, authpath, unsigned_ladder, NULL) == MTLLIB_NULL_PARAMS);
+	assert(mtllib_verify(ctx, NULL, authpath, unsigned_ladder, NULL) == MTLLIB_NULL_PARAMS);
+	assert(mtllib_verify(ctx, msg, NULL, unsigned_ladder, NULL) == MTLLIB_NULL_PARAMS);
+
+	mtllib_buffer_free(pubkey_buffer);
+	mtllib_buffer_free(msg);
+	mtllib_buffer_free(authpath);
+	mtllib_buffer_free(unsigned_ladder);
+	mtllib_key_free(ctx);
+	return 0;
+}
+
+uint8_t mtltest_mtllib_verify_unparseable(void) {
+	MTLLIB_CTX *ctx = NULL;
+	uint8_t sid[] = MTL_TEST_VECTOR_SID;
+	size_t pubkey_len = MTL_TEST_VECTOR_PUBKEY_LEN;
+	uint8_t pubkey[] = MTL_TEST_VECTOR_PUBKEY;
+	size_t msg_len = MTL_TEST_VECTOR_MSG_LEN;
+	uint8_t msg_raw[] = MTL_TEST_VECTOR_MSG;
+	size_t unsigned_ladder_len = MTL_TEST_VECTOR_UNSIGNED_LADDER_LEN;
+	uint8_t unsigned_ladder_raw[] = MTL_TEST_VECTOR_UNSIGNED_LADDER;
+	size_t authpath_len = MTL_TEST_VECTOR_CONDENSED_SIG_LEN;
+	uint8_t authpath_raw[] = MTL_TEST_VECTOR_CONDENSED_SIG;
+	size_t full_signature_len = MTL_TEST_VECTOR_FULL_SIG_LEN;
+	uint8_t full_signature_raw[] = MTL_TEST_VECTOR_FULL_SIG;
+	MTLLIB_BUFFER *pubkey_buffer = NULL;
+	MTLLIB_BUFFER *msg = NULL;
+	MTLLIB_BUFFER *authpath = NULL;
+	MTLLIB_BUFFER *unsigned_ladder = NULL;
+	MTLLIB_BUFFER *full_sig = NULL;
+	MTLLIB_BUFFER *bad_authpath = NULL;
+	MTLLIB_BUFFER *bad_unsigned_ladder = NULL;
+	MTLLIB_BUFFER *bad_full_sig = NULL;
+
+
+	assert(mtllib_buffer_initialize(&pubkey_buffer, pubkey_len, pubkey) == MTLLIB_OK);
+	assert(mtllib_buffer_initialize(&msg, msg_len, msg_raw) == MTLLIB_OK);
+	assert(mtllib_buffer_initialize(&authpath, authpath_len, authpath_raw) == MTLLIB_OK);
+	assert(mtllib_buffer_initialize(&unsigned_ladder, unsigned_ladder_len, unsigned_ladder_raw) == MTLLIB_OK);
+	assert(mtllib_buffer_initialize(&full_sig, full_signature_len, full_signature_raw) == MTLLIB_OK);
+	assert(mtllib_buffer_initialize(&bad_authpath, authpath_len-1, authpath_raw) == MTLLIB_OK);
+	assert(mtllib_buffer_initialize(&bad_unsigned_ladder, unsigned_ladder_len-1, unsigned_ladder_raw) == MTLLIB_OK);
+	assert(mtllib_buffer_initialize(&bad_full_sig, authpath_len + unsigned_ladder_len - 1, full_signature_raw) == MTLLIB_OK);
+	assert(mtllib_pubkey_from_buffer(MTL_TEST_VECTOR_SCHEME_NAME, &ctx, pubkey_buffer, sid) == MTLLIB_OK);
+
+	// Unparseable condensed signature
+	assert(mtllib_verify(ctx, msg, bad_authpath, unsigned_ladder, NULL) == MTLLIB_BAD_VALUE);
+	assert(mtllib_verify(ctx, msg, bad_authpath, NULL, NULL) == MTLLIB_BAD_VALUE);
+	assert(mtllib_verify(ctx, msg, bad_authpath, bad_unsigned_ladder, NULL) == MTLLIB_BAD_VALUE);
+
+	// Unparseable cached ladder
+	assert(mtllib_verify(ctx, msg, authpath, bad_unsigned_ladder, NULL) == MTLLIB_NO_LADDER);
+	assert(mtllib_verify(ctx, msg, full_sig, bad_unsigned_ladder, NULL) == MTLLIB_OK_VALIDATED_LADDER);
+
+	// Unparseable ladder in full signature
+	assert(mtllib_verify(ctx, msg, bad_full_sig, NULL, NULL) == MTLLIB_BAD_VALUE);
+
+
+	mtllib_buffer_free(pubkey_buffer);
+	mtllib_buffer_free(msg);
+	mtllib_buffer_free(authpath);
+	mtllib_buffer_free(unsigned_ladder);
+	mtllib_buffer_free(full_sig);
+	mtllib_buffer_free(bad_authpath);
+	mtllib_buffer_free(bad_unsigned_ladder);
+	mtllib_buffer_free(bad_full_sig);
+	mtllib_key_free(ctx);
 	return 0;
 }
 
 uint8_t mtltest_mtllib_verify_signed_ladder(void) {
-	uint8_t signed_ladder[] = MTL_TEST_SIGNED_LADDER_SLH_DSA_MTL_SHAKE_128F_BYTES;
 	MTLLIB_CTX *ctx = NULL;
-	uint8_t pubkey[] = {0x9b,0x0c,0x89,0x5e,0x2e,0x88,0x03,0x49,
-				        0x0d,0xe4,0x30,0x09,0x11,0xa8,0x01,0xb5,
-					    0x33,0xa6,0x8a,0x91,0x7b,0xf7,0x43,0xfd,
-					    0xe7,0xd7,0x40,0xff,0x5b,0xdd,0x85,0x30};
-	uint8_t sid[] = {0x55,0x97,0x17,0xb8,0xbf,0x02,0x01,0x8e};
-	size_t sid_len = 8;
+	uint8_t sid[] = MTL_TEST_VECTOR_SID;
+	size_t pubkey_len = MTL_TEST_VECTOR_PUBKEY_LEN;
+	uint8_t pubkey[] = MTL_TEST_VECTOR_PUBKEY;
+	size_t authpath_len = MTL_TEST_VECTOR_CONDENSED_SIG_LEN;
 
-	memset(&sid[0], 0x55, 8);
-	assert(mtllib_key_pubkey_from_params("SLH-DSA-MTL-SHAKE-128F", &ctx, NULL, pubkey, 32, sid, sid_len) == MTLLIB_OK);
-	assert(mtllib_verify_signed_ladder(ctx, signed_ladder, MTL_TEST_SIGNED_LADDER_SLH_DSA_MTL_SHAKE_128F_LEN) == MTLLIB_OK);
+	size_t full_signature_len = MTL_TEST_VECTOR_FULL_SIG_LEN;
+	uint8_t full_signature[] = MTL_TEST_VECTOR_FULL_SIG;
 
+	size_t signed_ladder_len = full_signature_len - authpath_len;
+	uint8_t* signed_ladder = full_signature + authpath_len;
+	MTLLIB_BUFFER *pubkey_buffer = NULL;
+	MTLLIB_BUFFER *signed_ladder_buffer = NULL;
+
+	assert(mtllib_buffer_initialize(&pubkey_buffer, pubkey_len, pubkey) == MTLLIB_OK);
+	assert(mtllib_pubkey_from_buffer(MTL_TEST_VECTOR_SCHEME_NAME, &ctx, pubkey_buffer, sid) == MTLLIB_OK);
+
+	assert(mtllib_buffer_initialize(&signed_ladder_buffer, signed_ladder_len, signed_ladder) == MTLLIB_OK);		
+	assert(mtllib_verify_signed_ladder(ctx, signed_ladder_buffer) == MTLLIB_OK);
+
+	mtllib_key_free(ctx);
+	mtllib_buffer_free(pubkey_buffer);
+	mtllib_buffer_free(signed_ladder_buffer);
 	return 0;
 }
 
 uint8_t mtltest_mtllib_verify_signed_ladder_no_sig(void) {
-	uint8_t unsigned_ladder[] = {
-		0x00,0x00,0x55,0x97,0x17,0xb8,0xbf,0x02,0x01,0x8e,0x00,0x02,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x07,0x6f,0xc5,0x3d,0x3b,0x75,0x24,0xca,0x59,0xb9,0x9b,0xd0,0x8a,
-		0x44,0x97,0x68,0xd0,0x00,0x00,0x00,0x08,0x00,0x00,0x00,0x09,0x8c,0xb7,0x07,0x3a,0x80,0x38,0xaf,0xcc,0xe8,0xe2,0x3a,0x12,0x6e,0x78,0x11,0xe6};
 	MTLLIB_CTX *ctx = NULL;
-	uint8_t pubkey[] = {0x9b,0x0c,0x89,0x5e,0x2e,0x88,0x03,0x49,
-				        0x0d,0xe4,0x30,0x09,0x11,0xa8,0x01,0xb5,
-					    0x33,0xa6,0x8a,0x91,0x7b,0xf7,0x43,0xfd,
-					    0xe7,0xd7,0x40,0xff,0x5b,0xdd,0x85,0x30};
-	uint8_t sid[] = {0x55,0x97,0x17,0xb8,0xbf,0x02,0x01,0x8e};
-	size_t sid_len = 8;
+	uint8_t sid[] = MTL_TEST_VECTOR_SID;
+	size_t pubkey_len = MTL_TEST_VECTOR_PUBKEY_LEN;
+	uint8_t pubkey[] = MTL_TEST_VECTOR_PUBKEY;
 
-	memset(&sid[0], 0x55, 8);
-	assert(mtllib_key_pubkey_from_params("SLH-DSA-MTL-SHAKE-128F", &ctx, NULL, pubkey, 32, sid, sid_len) == MTLLIB_OK);
-	assert(mtllib_verify_signed_ladder(ctx, unsigned_ladder, 60) == MTLLIB_INDETERMINATE);
+	size_t unsigned_ladder_len = MTL_TEST_VECTOR_UNSIGNED_LADDER_LEN;
+	uint8_t unsigned_ladder[] = MTL_TEST_VECTOR_UNSIGNED_LADDER;
+	MTLLIB_BUFFER *pubkey_buffer = NULL;
+	MTLLIB_BUFFER *unsigned_ladder_buffer = NULL;
 
+	assert(mtllib_buffer_initialize(&pubkey_buffer, pubkey_len, pubkey) == MTLLIB_OK);
+	assert(mtllib_pubkey_from_buffer(MTL_TEST_VECTOR_SCHEME_NAME, &ctx, pubkey_buffer, sid) == MTLLIB_OK);
+
+	assert(mtllib_buffer_initialize(&unsigned_ladder_buffer, unsigned_ladder_len, unsigned_ladder) == MTLLIB_OK);		
+	assert(mtllib_verify_signed_ladder(ctx, unsigned_ladder_buffer) == MTLLIB_INDETERMINATE);
+
+	mtllib_key_free(ctx);
+	mtllib_buffer_free(pubkey_buffer);
+	mtllib_buffer_free(unsigned_ladder_buffer);
 	return 0;
 }
 
 uint8_t mtltest_mtllib_verify_signed_ladder_corrupt(void) {
-	uint8_t signed_ladder[] = {
-		0x00,0x00,0x55,0x97,0x17,0xb8,0xbf,0x02,0x01,0x8e,0x00,0x02,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x07,0x6f,0xc5,0x3d,0x3b,0x75,0x24,0xca,0x59,0xb9,0x9b,0xd0,0x8a,
-		0x44,0x97,0x68,0xd0,0x00,0x00,0x00,0x08,0x00,0x00,0x00,0x09,0x8c,0xb7,0x07,0x3a,0x80,0x38,0xaf,0xcc,0xe8,0xe2,0x3a,0x12,0x6e,0x78,0x11,0xe6,0x00,0x00,0x42,0xc0,
-		0xb3,0xfe,0x3c,0x25,0x0f,0xd5,0x6f,0xcd,0x4a,0x3c,0xa0,0x11,0x9f,0x7e,0x73,0x5c,0x61,0xff,0x48,0xf4,0x65,0x9e,0x74,0xd8,0x7a,0xc5,0x5e,0x9f,0x56,0x03,0xc4,0xa6
-	};
 	MTLLIB_CTX *ctx = NULL;
-	uint8_t pubkey[] = {0x9b,0x0c,0x89,0x5e,0x2e,0x88,0x03,0x49,
-				        0x0d,0xe4,0x30,0x09,0x11,0xa8,0x01,0xb5,
-					    0x33,0xa6,0x8a,0x91,0x7b,0xf7,0x43,0xfd,
-					    0xe7,0xd7,0x40,0xff,0x5b,0xdd,0x85,0x30};
-	uint8_t sid[] = {0x55,0x97,0x17,0xb8,0xbf,0x02,0x01,0x8e};
-	size_t sid_len = 8;
+	uint8_t sid[] = MTL_TEST_VECTOR_SID;
+	size_t pubkey_len = MTL_TEST_VECTOR_PUBKEY_LEN;
+	uint8_t pubkey[] = MTL_TEST_VECTOR_PUBKEY;
+	size_t authpath_len = MTL_TEST_VECTOR_CONDENSED_SIG_LEN;
 
-	memset(&sid[0], 0x55, 8);
-	assert(mtllib_key_pubkey_from_params("SLH-DSA-MTL-SHAKE-128F", &ctx, NULL, pubkey, 32, sid, sid_len) == MTLLIB_OK);
-	assert(mtllib_verify_signed_ladder(ctx, signed_ladder, 96) == MTLLIB_INDETERMINATE);
+	size_t full_signature_len = MTL_TEST_VECTOR_FULL_SIG_LEN;
+	uint8_t full_signature[] = MTL_TEST_VECTOR_FULL_SIG;
 
+	size_t signed_ladder_len = full_signature_len - authpath_len;
+	uint8_t* signed_ladder = full_signature + authpath_len;
+	MTLLIB_BUFFER *pubkey_buffer = NULL;
+	MTLLIB_BUFFER *full_signature_buffer = NULL;
+
+	assert(mtllib_buffer_initialize(&pubkey_buffer, pubkey_len, pubkey) == MTLLIB_OK);
+	assert(mtllib_pubkey_from_buffer(MTL_TEST_VECTOR_SCHEME_NAME, &ctx, pubkey_buffer, sid) == MTLLIB_OK);
+
+	signed_ladder[signed_ladder_len/2]++;
+	assert(mtllib_buffer_initialize(&full_signature_buffer, full_signature_len, full_signature) == MTLLIB_OK);		
+	assert(mtllib_verify_signed_ladder(ctx, full_signature_buffer) == MTLLIB_BOGUS_CRYPTO);
+
+	mtllib_key_free(ctx);
+	mtllib_buffer_free(pubkey_buffer);
+	mtllib_buffer_free(full_signature_buffer);
 	return 0;
 }
 
 uint8_t mtltest_mtllib_verify_signed_ladder_null(void) {
-	uint8_t unsigned_ladder[] = {
-		0x00,0x00,0x55,0x97,0x17,0xb8,0xbf,0x02,0x01,0x8e,0x00,0x02,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x07,0x6f,0xc5,0x3d,0x3b,0x75,0x24,0xca,0x59,0xb9,0x9b,0xd0,0x8a,
-		0x44,0x97,0x68,0xd0,0x00,0x00,0x00,0x08,0x00,0x00,0x00,0x09,0x8c,0xb7,0x07,0x3a,0x80,0x38,0xaf,0xcc,0xe8,0xe2,0x3a,0x12,0x6e,0x78,0x11,0xe6};
 	MTLLIB_CTX *ctx = NULL;
-	uint8_t pubkey[] = {0x9b,0x0c,0x89,0x5e,0x2e,0x88,0x03,0x49,
-				        0x0d,0xe4,0x30,0x09,0x11,0xa8,0x01,0xb5,
-					    0x33,0xa6,0x8a,0x91,0x7b,0xf7,0x43,0xfd,
-					    0xe7,0xd7,0x40,0xff,0x5b,0xdd,0x85,0x30};
-	uint8_t sid[] = {0x55,0x97,0x17,0xb8,0xbf,0x02,0x01,0x8e};
-	size_t sid_len = 8;
+	uint8_t sid[] = MTL_TEST_VECTOR_SID;
+	size_t pubkey_len = MTL_TEST_VECTOR_PUBKEY_LEN;
+	uint8_t pubkey[] = MTL_TEST_VECTOR_PUBKEY;
 
-	memset(&sid[0], 0x55, 8);
-	assert(mtllib_key_pubkey_from_params("SLH-DSA-MTL-SHAKE-128F", &ctx, NULL, pubkey, 32, sid, sid_len) == MTLLIB_OK);
+	size_t unsigned_ladder_len = MTL_TEST_VECTOR_UNSIGNED_LADDER_LEN;
+	uint8_t unsigned_ladder[] = MTL_TEST_VECTOR_UNSIGNED_LADDER;
+	MTLLIB_BUFFER *pubkey_buffer = NULL;
+	MTLLIB_BUFFER *unsigned_ladder_buffer = NULL;
 
-	assert(mtllib_verify_signed_ladder(NULL, unsigned_ladder, 60) == MTLLIB_NULL_PARAMS);
-	assert(mtllib_verify_signed_ladder(ctx, NULL, 60) == MTLLIB_NULL_PARAMS);
+	assert(mtllib_buffer_initialize(&pubkey_buffer, pubkey_len, pubkey) == MTLLIB_OK);
+	assert(mtllib_pubkey_from_buffer(MTL_TEST_VECTOR_SCHEME_NAME, &ctx, pubkey_buffer, sid) == MTLLIB_OK);
+	
+	assert(mtllib_buffer_initialize(&unsigned_ladder_buffer, unsigned_ladder_len, unsigned_ladder) == MTLLIB_OK);	
+	assert(mtllib_verify_signed_ladder(NULL, unsigned_ladder_buffer) == MTLLIB_NULL_PARAMS);
+	assert(mtllib_verify_signed_ladder(ctx, NULL) == MTLLIB_NULL_PARAMS);
 
+	mtllib_key_free(ctx);
+	mtllib_buffer_free(pubkey_buffer);
+	mtllib_buffer_free(unsigned_ladder_buffer);
 	return 0;
 }
 

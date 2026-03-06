@@ -1,5 +1,5 @@
 /*
-	Copyright (c) 2025, VeriSign, Inc.
+	Copyright (c) 2026, VeriSign, Inc.
 	All rights reserved.
 
 	Redistribution and use in source and binary forms, with or without
@@ -38,46 +38,11 @@
 #include "mtllib.h"
 
 /* Type definitions */
-typedef enum {
-	HEX_STRING,
-	BASE64_STRING,
-} data_encoding;
-
-#define ALG_NONE 0
-#define SPX_ALG_SHAKE 1
-#define SPX_ALG_SHA2  2
-
-#define SIMPLE 0
-#define ROBUST 1
-
-typedef struct ALGORITHM {
-	char *name;
-	uint16_t sec_param;
-	uint16_t nist_level;
-	uint8_t randomize;
-	uint8_t robust;
-	char opt;
-	uint8_t algo;
-	char *oqs_str;
-	uint8_t oid_len;
-	uint8_t oid[16];
-} ALGORITHM;
 
 /* Helper macros */
-#define LOG_MESSAGE(msg, buffer) if(buffer!=NULL) {fprintf(buffer,"%s\n", msg);}
-
-#define MTL_MAX_BUFFER_SIZE 65535
 
 /* Function prototypes */
-size_t mtl_buffer2bin(uint8_t* input, size_t input_len, uint8_t** output, data_encoding encoding);
-void mtl_write_buffer(uint8_t* buffer, size_t buffer_len, FILE* output, data_encoding encoding, bool newline);
-char *mtl_str2upper(char *data);
-void mtl_print_auth_path(AUTHPATH* auth_path, RANDOMIZER* mtl_rand, uint32_t hash_len, FILE *stream);
-void mtl_print_ladder(LADDER* ladder, FILE *stream);
-void mtl_print_ladder_signature(uint8_t* sig, size_t sig_len, FILE* stream);
-void mtl_print_rung(RUNG* rung, FILE* stream);
-void mtl_print_message(uint8_t* message, uint32_t message_len, FILE* stream);
-void mtl_print_signature_scheme(MTL_ALGORITHM_PROPS* algo, FILE* stream);
-void mtl_print_mtl_buffer(char* label, uint8_t *buffer, uint32_t buffer_length, FILE* stream);
+MTLLIB_STATUS buffer_from_file(char* filename, MTLLIB_BUFFER** buffer);
+MTLLIB_STATUS buffer_to_file(char* filename, MTLLIB_BUFFER* buffer);
 
 #endif  // __MTL_EXAMPLE_UTIL_H__

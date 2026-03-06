@@ -1,5 +1,5 @@
 /*
-	Copyright (c) 2025, VeriSign, Inc.
+	Copyright (c) 2026, VeriSign, Inc.
 	All rights reserved.
 
 	Redistribution and use in source and binary forms, with or without
@@ -36,34 +36,5 @@
 #include <stdint.h>
 #include "mtl_example_util.h"
 #include "mtllib.h"
-
-/* Type definitions */
-// Quick linked list for leaf node ids
-typedef struct handle_queue
-{
-	MTL_HANDLE* handle;
-	struct handle_queue *next;
-	char filename[1024];
-} handle_queue;
-
-/*****************************************************************
- * Setup a private key
- ******************************************************************
- * @param pkey          Private key buffer
- * @param pkey_length   Length of the private key buffer
- * @param sk, secret key value
- * @param sk_len, length of the secret key
- * @param pk, public key value
- * @param pk_len, length of the public key
- * @param keystr: string name of the used signature algorithm
- * @param randomize: flag indicating if randomization should be used
- * @param params, Underlying singnature scheme parameters
- * @param algo_type, Algorithm type identifier 
- * @return MTL context for verification of MTL signatures
- */
-MTL_CTX *setup_private_key(uint8_t *pkey, size_t pkey_len,
-						   uint8_t **sk, uint32_t *sk_len,
-						   uint8_t **pk, uint32_t *pk_len, char **keystr,
-						   uint16_t *randomize, void **params, uint8_t *algo_type);
 
 #endif //__MTL_SIGN_TOOL_H__

@@ -1,5 +1,5 @@
 /*
-	Copyright (c) 2025, VeriSign, Inc.
+	Copyright (c) 2026, VeriSign, Inc.
 	All rights reserved.
 
 	Redistribution and use in source and binary forms, with or without
@@ -40,12 +40,23 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include "mtl_index.h"
 
 // Definitions
 /** Macro for testing if the platform uses big or little endian */
 #define BIG_ENDIAN_PLATFORM (!*(uint8_t *)&(uint16_t){1})
 
+
+
 // Function Prototypes
+/**
+ * Convert a 64 bit unsigned integer to bit endian bytes
+ * @param buffer     Byte array output
+ * @param value      Unsigned 64 bit integer to convert
+ * @return number of bytes for output
+ */
+uint16_t uint64_to_bytes(unsigned char *buffer, uint64_t value);
+
 /**
  * Convert a 32 bit unsigned integer to bit endian bytes
  * @param buffer     Byte array output
@@ -63,6 +74,14 @@ uint16_t uint32_to_bytes(unsigned char *buffer, uint32_t value);
 uint16_t uint16_to_bytes(unsigned char *buffer, uint16_t value);
 
 /**
+ * Convert a 64 bit endian byte array to unsigned integer
+ * @param buffer     Byte array input
+ * @param value      Unsigned 32 bit integer result
+ * @return number of bytes for input
+ */
+uint16_t bytes_to_uint64(unsigned char *buffer, uint64_t * value);
+
+/**
  * Convert a 32 bit endian byte array to unsigned integer
  * @param buffer     Byte array input
  * @param value      Unsigned 32 bit integer result
@@ -77,5 +96,11 @@ uint16_t bytes_to_uint32(unsigned char *buffer, uint32_t * value);
  * @return number of bytes for input
  */
 uint16_t bytes_to_uint16(unsigned char *buffer, uint16_t * value);
+
+/**
+ * Wrapper functions to convert MTL_INDEX values
+ */
+uint16_t mtl_index_to_bytes(unsigned char *buffer, MTL_INDEX value);
+uint16_t bytes_to_mtl_index(unsigned char *buffer, MTL_INDEX * value);
 
 #endif				//__MTL_UTIL_H__
