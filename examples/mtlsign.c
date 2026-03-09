@@ -1,5 +1,5 @@
 /*
-    Copyright (c) 2025, VeriSign, Inc.
+    Copyright (c) 2026, VeriSign, Inc.
     All rights reserved.
 
     Redistribution and use in source and binary forms, with or without
@@ -48,36 +48,6 @@
 #include "mtlsign.h"
 
 
-/*****************************************************************
- * Load a file into a memory buffer and return the size
- ******************************************************************
- * @return None
- */
-static size_t buffer_from_file(char* filename, uint8_t** buffer) {
-    FILE* infile = NULL;
-    size_t filesize = 0;
-
-    if((filename != NULL) && (buffer != NULL)) {
-        infile = fopen(filename, "rb");
-        if (infile == NULL) {
-            perror("Error opening file");
-            return 0; // Exit with an error code
-        }
-
-        fseek(infile, 0, SEEK_END);
-        filesize = ftell(infile);
-        fseek(infile, 0, SEEK_SET);
-
-        *buffer = malloc(filesize);
-        if(*buffer == NULL) {
-            return 0;
-        }
-        fread(*buffer, 1, filesize, infile);
-        fclose(infile);
-    }
-
-    return filesize;
-}
 
 /*****************************************************************
  * Print the usage for the tool
@@ -92,15 +62,14 @@ static void print_usage(void)
     printf("\n    RETURN VALUE\n");
     printf("      0 on success or number for error\n");
     printf("\n    OPTIONS\n");
-    printf("      -b            Message files and signatures use base64 encoding rather than binary data in hex format\n");
     printf("      -h            Print this help message\n");
-    printf("      -i= NodeID    Get the latest signature info for a NodeID rather than signing a message\n");
-    printf("      -l            Produce full signatures instead of condensed signature\n");
+    printf("      -r            Reconstruct full signatures from the same ladder rather\n");
+    printf("                      than generating a fresh signed ladder each time\n");
     printf("\n    PARAMETERS\n");
-    printf("      key_file      The key_file name/path where the generated key should be read/updated\n");
+    printf("      key_file      The key_file name/path where the generated key should be read\n");
     printf("      msg_file_x    File that contains the message to sign (in binary or base64 format)\n");
     printf("\n    EXAMPLE USAGE\n");
-    printf("      mtlsign -l -i 0 ./testkey.key ./message1.bin ./message2.bin\n");
+    printf("      mtlsign ./testkey.key ./message1.bin ./message2.bin\n");
     printf("\n");    
 }
 
@@ -114,62 +83,49 @@ static void print_usage(void)
 int main(int argc, char **argv)
 {
     char flag;
-    uint8_t *msgparam = NULL;
-    size_t msgparam_len = 0;
-    data_encoding format = HEX_STRING;
-    bool provide_signed_ladder = false;
-    char *keyfilename = NULL;
-    bool key_updated = false;
-    FILE *output = stdout;  
-    size_t keyfile_size = 0;
-    uint8_t *keybuffer = NULL;
+    bool reconstruct = false;
+    char *key_filename = NULL;
+    char *message_filename = NULL;  
+    char output_filename[256+15];
+    size_t key_file_size = 0;
+    MTLLIB_BUFFER *key_buffer = NULL;
     MTLLIB_CTX* ctx = NULL;
-    MTL_HANDLE* handle = NULL;
-    handle_queue* messages = NULL;
-    handle_queue* messages_last =NULL;
-    uint8_t* sig = NULL;
-    size_t sig_len = 0;
-    uint8_t* signed_ladder = NULL;
-    size_t   signed_ladder_len = 0;
-    uint8_t *message = NULL;
-    size_t msg_file_len = 0;
-    uint8_t* handle_zero = calloc(1, 64);
+    MTL_HANDLE *handle = NULL;
+    MTLLIB_BUFFER *message = NULL;
+    MTLLIB_BUFFER *ladder = NULL;
+    MTLLIB_BUFFER *condensed_sig = NULL;
+    MTLLIB_BUFFER *full_sig = NULL;
     MTLLIB_STATUS mtllib_errno;
+    int i = 0;
+    MTL_INDEX leaf_max = 0;
+
+    // Gracefully shutdown upon encountering an error
+    #define HANDLE_ERRORS(status_code) \
+    if(status_code != MTLLIB_OK)\
+    {\
+        fprintf(stderr, "Error signing\n");\
+        mtllib_buffer_free(key_buffer);\
+        mtllib_buffer_free(ladder);\
+        mtllib_buffer_free(condensed_sig);\
+        mtllib_buffer_free(full_sig);\
+        mtllib_sign_free_handle(&handle);\
+        exit(status_code);\
+    }
 
 	// Setup default file permissions (key and signatures)
     // to be read and write only for owner of application
 	umask(0177);
 
-    while ((flag = getopt(argc, argv, "bhlvi:")) != -1)
+    while ((flag = getopt(argc, argv, "hr")) != -1)
     {
         switch (flag)
         {
-        case 'b':
-            format = BASE64_STRING;
-            break;
         case 'h':
             print_usage();
             exit(0);
             break;
-        case 'l':
-            provide_signed_ladder = true;
-            break;
-        case 'i':
-            // Add the leaf index to the queue to later print
-            if (messages == NULL)
-            {
-                messages = calloc(1, sizeof(handle_queue));
-                messages_last = messages;
-            }
-            else
-            {
-                messages_last->next = calloc(1, sizeof(handle_queue));
-                messages_last = messages_last->next;
-            }
-            MTL_HANDLE* tmp_handle = calloc(1, sizeof(MTL_HANDLE));
-            tmp_handle->leaf_index = atol(optarg);
-            messages_last->handle = tmp_handle;
-            strcpy(messages_last->filename,"");
+        case 'r':
+            reconstruct = true;
             break;
         default:
             break;
@@ -185,169 +141,112 @@ int main(int argc, char **argv)
         print_usage();
         return (1);
     }
-    keyfilename = realpath(argv[0], NULL);
-    if(keyfilename == NULL) {
-        LOG_ERROR("ERROR - Unable to load key file\n");
-        free(handle_zero);
-        return (2);        
-    }
-    argc--;
-    argv++;    
-    // Do any filtering on the message_file here to restrict access if desired
+    key_filename = argv[0];
+    argc -= 1;
+    argv += 1;
 
     // Load the key
-    keyfile_size = buffer_from_file(keyfilename, &keybuffer);
+    mtllib_errno = buffer_from_file(key_filename, &key_buffer);
+    HANDLE_ERRORS(mtllib_errno);
 
+    mtllib_errno = mtllib_key_from_buffer(key_buffer, &ctx);
+    HANDLE_ERRORS(mtllib_errno);
 
-    if(mtllib_key_from_buffer(keybuffer, keyfile_size, &ctx) != MTLLIB_OK) {     
-        LOG_ERROR("Unable to load key\n");
-        free(handle_zero);
-        return (2);    
-    }
-    free(keybuffer);
-    keybuffer = NULL;
+    mtllib_errno = mtllib_buffer_free(key_buffer);
+    HANDLE_ERRORS(mtllib_errno);
 
-    while (argc > 0)
+    // Sign all the messages in a batch
+    for (i = 0; i < argc; i++)
     {
-        char *message_file = realpath(argv[0], NULL);
-        if(message_file == NULL) {
-            LOG_ERROR("Message file does not exist!");
-            mtllib_key_free(ctx);
-            free(handle_zero);
-            return (2);     
-        }        
-        // Do any filtering on the message_file here to restrict access if desired
+        // Read message from file and add it to the tree
+        message_filename = argv[i];
+        mtllib_errno = buffer_from_file(message_filename, &message);
+        HANDLE_ERRORS(mtllib_errno);
 
-        // Read message from file
-        msg_file_len = buffer_from_file(message_file, &message);        
+        // Sign the message and add it to the tree
+        mtllib_errno = mtllib_sign_append(ctx, message, &handle);
+        HANDLE_ERRORS(mtllib_errno);
+        leaf_max = handle->leaf_index; // keep track of the maximum added leaf_index
 
-        // Convert it to bin if necessary
-        if (format == BASE64_STRING)
-        {
-            msgparam_len = mtl_buffer2bin(message, msg_file_len, &msgparam, format);
-            mtllib_errno = mtllib_sign_append(ctx, msgparam, msgparam_len, &handle);
-        } else 
-        {
-            mtllib_sign_append(ctx, message, msg_file_len, &handle) ;
-        }
-        free(msgparam);
-        if (mtllib_errno != MTLLIB_OK) {
-                LOG_ERROR("Unable to add message to node set");
-                free(handle);
-                free(message_file);
-                mtllib_key_free(ctx);                
-                free(handle_zero);
-                return (1);                 
-        }
-
-        key_updated = true;
-        free(message);
-
-        // Add the leaf index to the queue to later print
-        if (messages == NULL)
-        {
-            messages = calloc(1, sizeof(handle_queue));
-            if(messages == NULL) {
-                LOG_ERROR("Unable to add message to proof set");
-                free(handle);
-                free(message_file);
-                mtllib_key_free(ctx);                
-                free(handle_zero);
-                free(message);                
-                return (1);               
-            }
-            messages_last = messages;
-        }
-        else
-        {
-            messages_last->next = calloc(1, sizeof(handle_queue));
-            if(messages == NULL) {
-                LOG_ERROR("Unable to add message to proof set");
-                free(handle);
-                free(message_file);
-                mtllib_key_free(ctx);                
-                free(handle_zero);
-                free(message);                
-                return (1);               
-            }
-            messages_last = messages_last->next;
-        }
-        strncpy(messages_last->filename, message_file, 1024);
-        messages_last->handle = handle;
-        free(message_file);
-
-        argc--;
-        argv++;
+        // Memory cleanup
+        mtllib_sign_free_handle(&handle);
+        mtllib_buffer_free(message);
     }
 
-    // For leaf index in queue generate the auth path
-    handle_queue *tmp_handle = messages;
-    while (messages != NULL)
+    // Output updated state before signatures
+    key_file_size = mtllib_key_to_buffer_length(ctx);
+    mtllib_errno = mtllib_buffer_initialize(&key_buffer, key_file_size, NULL);
+    HANDLE_ERRORS(mtllib_errno);
+
+    mtllib_errno = mtllib_key_to_buffer(ctx, key_buffer);
+    HANDLE_ERRORS(mtllib_errno);
+
+    mtllib_errno = buffer_to_file(key_filename, key_buffer);
+    HANDLE_ERRORS(mtllib_errno);
+
+    mtllib_errno = mtllib_buffer_free(key_buffer);
+    HANDLE_ERRORS(mtllib_errno);
+
+    // Write the signatures to files
+    /* Signed Ladder */
+    mtllib_errno = mtllib_buffer_initialize(&ladder, mtllib_sign_get_signed_ladder_length(ctx), NULL);
+    HANDLE_ERRORS(mtllib_errno);
+    mtllib_errno = mtllib_sign_get_signed_ladder(ctx, ladder);
+    HANDLE_ERRORS(mtllib_errno);
+
+    strncpy(output_filename, key_filename, 256);
+    strncat(output_filename, ".ladder", 8);
+    mtllib_errno = buffer_to_file(output_filename, ladder);
+    HANDLE_ERRORS(mtllib_errno);
+
+    handle = calloc(1,sizeof(MTL_HANDLE));
+    if (handle == NULL) {
+        HANDLE_ERRORS(errno);
+    }
+    for (i = 0; i < argc; i++)
     {
-        if(memcmp(messages->handle->sid,handle_zero, messages->handle->sid_len) == 0) {
-            // If this is an extend path only then SID will be null
-            memcpy(messages->handle->sid, ctx->mtl->sid.id, messages->handle->sid_len);
+        handle->leaf_index = leaf_max - (argc - 1) + i;
+        
+        /* Condensed Signatures */
+        mtllib_errno = mtllib_buffer_initialize(&condensed_sig, mtllib_sign_get_condensed_sig_length(ctx, handle), NULL);
+        HANDLE_ERRORS(mtllib_errno);
+        mtllib_errno = mtllib_sign_get_condensed_sig(ctx, handle, condensed_sig);
+        HANDLE_ERRORS(mtllib_errno);
+
+        strncpy(output_filename, argv[i], 256);
+        strncat(output_filename, ".condensed_sig", 15);
+        mtllib_errno = buffer_to_file(output_filename, condensed_sig);
+        HANDLE_ERRORS(mtllib_errno);
+
+        /* Full Signatures */
+        mtllib_errno = mtllib_buffer_initialize(&full_sig, mtllib_sign_get_full_sig_length(ctx, handle), NULL);
+        HANDLE_ERRORS(mtllib_errno);
+        if (reconstruct) {
+            mtllib_errno = mtllib_buffer_append(full_sig, condensed_sig->buffer_data,condensed_sig->buffer_position);
+            HANDLE_ERRORS(mtllib_errno);
+            mtllib_errno = mtllib_buffer_append(full_sig, ladder->buffer_data, ladder->buffer_position);
+            HANDLE_ERRORS(mtllib_errno);
+        }
+        else {
+            mtllib_errno = mtllib_sign_get_full_sig(ctx, handle, full_sig);
+            HANDLE_ERRORS(mtllib_errno);
         }
 
-        if((messages->handle->leaf_index < ctx->mtl->nodes.leaf_count) && 
-           (memcmp(messages->handle->sid, ctx->mtl->sid.id, messages->handle->sid_len) == 0) &&
-           (messages->handle->sid_len == ctx->mtl->sid.length)) {
-                // Get the message buffer and write it to output
-                if(mtllib_sign_get_condensed_sig(ctx, messages->handle, &sig, &sig_len) != MTLLIB_OK) {
-                    LOG_ERROR("Unable to get condensed signature");
-                }
+        strncpy(output_filename, argv[i], 256);
+        strncat(output_filename, ".full_sig", 10);
+        mtllib_errno = buffer_to_file(output_filename, full_sig);
+        HANDLE_ERRORS(mtllib_errno);
 
-                if (strlen(messages->filename) > 0)
-                {
-                    fprintf(output, "%s,%u,", messages->filename, messages->handle->leaf_index);
-                }
-                else
-                {
-                    fprintf(output, ",%u,", messages->handle->leaf_index);
-                }
 
-                mtl_write_buffer(sig, sig_len, output, format, true);
-                free(sig);
-           }
-        tmp_handle = messages;
-        messages = messages->next;
-        mtllib_sign_free_handle(&tmp_handle->handle);
-        free(tmp_handle);
-    }
-    free(handle_zero);
+        mtllib_buffer_free(condensed_sig);
+        mtllib_buffer_free(full_sig);
 
-    // Generate the signed ladder
-    if (provide_signed_ladder == true)
-    {
-        if(mtllib_sign_get_signed_ladder(ctx, &signed_ladder, &signed_ladder_len) != MTLLIB_OK) {
-            LOG_ERROR("Unable to get signed ladder");
-        }
-
-        // Write the data
-        fprintf(output, "Ladder,,");
-        mtl_write_buffer(signed_ladder, signed_ladder_len, output, format, true);
-
-        free(signed_ladder);
     }
 
-    // Output updated private key
-    if ((keyfilename != NULL) && (key_updated == true))
-    {
-        keyfile_size = mtllib_key_to_buffer(ctx, &keybuffer);
-        if(keyfile_size > 0) {
-            FILE* outfile = fopen(keyfilename, "wb");
-            if (outfile == NULL) {
-                return 1; // Exit with an error code
-            }            
-            if(fwrite(keybuffer, keyfile_size, 1, outfile) == 0) {
-                LOG_ERROR("Unable to write the private key to a file");
-            }
-            fclose(outfile);
-        }
-        free(keybuffer);
-    }
-
+    // Memory cleanup
+    mtllib_buffer_free(ladder);
+    mtllib_sign_free_handle(&handle);
     mtllib_key_free(ctx);
-    free(keyfilename);
-    return (0);
+
+    return 0;
 }

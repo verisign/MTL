@@ -1,5 +1,5 @@
 /*
-	Copyright (c) 2025, VeriSign, Inc.
+	Copyright (c) 2026, VeriSign, Inc.
 	All rights reserved.
 
 	Redistribution and use in source and binary forms, with or without
@@ -33,28 +33,11 @@
 #ifndef __MTLTEST_MOCK_H__
 #define __MTLTEST_MOCK_H__
 
+#include "mtl_hash.h"
+
 // Mock function prototypes
-uint8_t mtl_test_hash_msg(void *parameters,
-			  SERIESID * sid,
-			  uint32_t node_id,
-			  uint8_t * randomizer,
-			  uint32_t randomizer_len,
-			  uint8_t * msg_buffer,
-			  uint32_t msg_length, uint8_t * hash,
-			  uint32_t hash_length, char * ctx,
-			  uint8_t ** rmtl, uint32_t * rmtl_len);
-uint8_t mtl_test_hash_leaf(void *params,
-			   SERIESID * sid,
-			   uint32_t node_id,
-			   uint8_t * msg_buffer,
-			   uint32_t msg_length,
-			   uint8_t * hash, uint32_t hash_length);
-uint8_t mtl_test_hash_node(void *params,
-			   SERIESID * sid,
-			   uint32_t left_index,
-			   uint32_t right_index,
-			   uint8_t * left_hash,
-			   uint8_t * right_hash,
-			   uint8_t * hash, uint32_t hash_length);
+H_MSG mtl_test_hash_msg;
+H_LEAF mtl_test_hash_leaf;
+H_INT mtl_test_hash_int;
 
 #endif				// __MTLTEST_MOCK_H__

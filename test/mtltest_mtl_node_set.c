@@ -1,5 +1,5 @@
 /*
-	Copyright (c) 2025, VeriSign, Inc.
+	Copyright (c) 2026, VeriSign, Inc.
 	All rights reserved.
 
 	Redistribution and use in source and binary forms, with or without
@@ -30,11 +30,9 @@
 	ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 	POSSIBILITY OF SUCH DAMAGE.
 */
-#include <config.h>
 #include <stdio.h>
 #include "mtl_error.h"
-#include "mtl_spx.h"
-#include "spx_funcs.h"
+#include "mtl_node_set.h"
 #include <assert.h>
 #include <string.h>
 
@@ -91,26 +89,24 @@ uint8_t mtltest_mtl_node_set(void)
  */
 uint8_t mtltest_mtl_node_set_init(void)
 {
-	SEED seed;
 	MTLNODES nodes;
 	uint32_t index;
 	SERIESID sid;
-	uint8_t sid_val[] = { 0x28, 0xe7, 0x56, 0xf0, 0xb4, 0x61, 0xf6, 0x79 };
-	uint8_t seed_val[] = { 0x66, 0x87, 0x0c, 0x58, 0x1e, 0x05, 0x1e, 0x75,
-		0x06, 0xb5, 0x59, 0x89, 0x75, 0x08, 0xe7, 0x2c,
-		0x03, 0x69, 0x6e, 0x98, 0x22, 0x87, 0x08, 0xe2,
-		0xf1, 0x85, 0xb2, 0xe5, 0x60, 0xbf, 0xaa, 0x46
+	uint16_t hash_len = 16;
+	uint8_t sid_val[] = {  // Randomly generated test value
+		0x16, 0x37, 0xfb, 0x9b, 0x83, 0xef, 0xe1, 0xf7, 
+		0x8e, 0x5d, 0xa5, 0x12, 0xb5, 0x75, 0xd7, 0xe1, 
+		0x19, 0x12, 0x58, 0x20, 0x76, 0x5f, 0xb6, 0x06, 
+		0x1c, 0xad, 0x3c, 0xfc, 0xe5, 0x85, 0xbd, 0xfa, 
 	};
 
-	seed.length = 32;
-	memcpy(seed.seed, seed_val, seed.length);
-	sid.length = 8;
+	sid.length = 32;
 	memcpy(sid.id, sid_val, sid.length);
 
-	mtl_node_set_init(&nodes, &seed, &sid);
+	mtl_node_set_init(&nodes, &sid);
 
 	assert(nodes.leaf_count == 0);
-	assert(nodes.hash_size == seed.length);
+	assert(nodes.hash_size == hash_len);
 	assert(nodes.tree_page_size == MTL_TREE_PAGE_SIZE);
 
 	for (index = 0; index < MTL_TREE_MAX_PAGES; index++) {
@@ -138,21 +134,18 @@ uint8_t mtltest_mtl_node_set_init(void)
  */
 uint8_t mtltest_mtl_node_set_init_null(void)
 {
-	SEED seed;
 	SERIESID sid;
-	uint8_t sid_val[] = { 0x28, 0xe7, 0x56, 0xf0, 0xb4, 0x61, 0xf6, 0x79 };
-	uint8_t seed_val[] = { 0x66, 0x87, 0x0c, 0x58, 0x1e, 0x05, 0x1e, 0x75,
-		0x06, 0xb5, 0x59, 0x89, 0x75, 0x08, 0xe7, 0x2c,
-		0x03, 0x69, 0x6e, 0x98, 0x22, 0x87, 0x08, 0xe2,
-		0xf1, 0x85, 0xb2, 0xe5, 0x60, 0xbf, 0xaa, 0x46
+	uint8_t sid_val[] = {  // Randomly generated test value
+		0x16, 0x37, 0xfb, 0x9b, 0x83, 0xef, 0xe1, 0xf7, 
+		0x8e, 0x5d, 0xa5, 0x12, 0xb5, 0x75, 0xd7, 0xe1, 
+		0x19, 0x12, 0x58, 0x20, 0x76, 0x5f, 0xb6, 0x06, 
+		0x1c, 0xad, 0x3c, 0xfc, 0xe5, 0x85, 0xbd, 0xfa, 
 	};
 
-	sid.length = 8;
+	sid.length = 32;
 	memcpy(sid.id, sid_val, sid.length);
-	seed.length = 32;
-	memcpy(seed.seed, seed_val, seed.length);
 
-	mtl_node_set_init(NULL, &seed, &sid);
+	mtl_node_set_init(NULL, &sid);
 	// Verifying that this doesn't crash or cause strange behaviors
 
 	return 0;
@@ -163,18 +156,17 @@ uint8_t mtltest_mtl_node_set_init_null(void)
  */
 uint8_t mtltest_mtl_node_set_insert(void)
 {
-	SEED seed;
 	SERIESID sid;
 	MTLNODES nodes;
 	uint32_t node_index, page_index;
 	uint8_t buffer[32];
-	uint32_t hash_len = 32;
+	uint32_t hash_len = 16;
 	uint32_t test_page_size = 8;
-	uint8_t sid_val[] = { 0x28, 0xe7, 0x56, 0xf0, 0xb4, 0x61, 0xf6, 0x79 };
-	uint8_t seed_val[] = { 0x66, 0x87, 0x0c, 0x58, 0x1e, 0x05, 0x1e, 0x75,
-		0x06, 0xb5, 0x59, 0x89, 0x75, 0x08, 0xe7, 0x2c,
-		0x03, 0x69, 0x6e, 0x98, 0x22, 0x87, 0x08, 0xe2,
-		0xf1, 0x85, 0xb2, 0xe5, 0x60, 0xbf, 0xaa, 0x46
+	uint8_t sid_val[] = { // Randomly generated test value
+		0x16, 0x37, 0xfb, 0x9b, 0x83, 0xef, 0xe1, 0xf7, 
+		0x8e, 0x5d, 0xa5, 0x12, 0xb5, 0x75, 0xd7, 0xe1, 
+		0x19, 0x12, 0x58, 0x20, 0x76, 0x5f, 0xb6, 0x06, 
+		0x1c, 0xad, 0x3c, 0xfc, 0xe5, 0x85, 0xbd, 0xfa, 
 	};
 	// Partial reverse-mapping of mtl_node_set_int_node_id
 	uint32_t reverse_map_left[32] = { 0, 1, 0, 2, 3, 2, 0, 4, 
@@ -188,15 +180,13 @@ uint8_t mtltest_mtl_node_set_insert(void)
 		13, 14, 15, 15, 15, 15, 15, 16
 	};
 
-	seed.length = hash_len;
-	memcpy(seed.seed, seed_val, seed.length);
-	sid.length = 8;
+	sid.length = 32;
 	memcpy(sid.id, sid_val, sid.length);
 
-	mtl_node_set_init(&nodes, &seed, &sid);
+	mtl_node_set_init(&nodes, &sid);
 
 	assert(nodes.leaf_count == 0);
-	assert(nodes.hash_size == seed.length);
+	assert(nodes.hash_size == hash_len);
 	assert(nodes.tree_pages[0] == NULL);
 	nodes.tree_page_size = test_page_size * hash_len;
 
@@ -264,29 +254,26 @@ uint8_t mtltest_mtl_node_set_insert(void)
  */
 uint8_t mtltest_mtl_node_set_fetch(void)
 {
-	SEED seed;
 	SERIESID sid;
 	MTLNODES nodes;
 	uint32_t index;
 	uint8_t buffer[32];
 	uint8_t *hash;
-	uint32_t hash_len = 32;
-	uint8_t sid_val[] = { 0x28, 0xe7, 0x56, 0xf0, 0xb4, 0x61, 0xf6, 0x79 };
-	uint8_t seed_val[] = { 0x66, 0x87, 0x0c, 0x58, 0x1e, 0x05, 0x1e, 0x75,
-		0x06, 0xb5, 0x59, 0x89, 0x75, 0x08, 0xe7, 0x2c,
-		0x03, 0x69, 0x6e, 0x98, 0x22, 0x87, 0x08, 0xe2,
-		0xf1, 0x85, 0xb2, 0xe5, 0x60, 0xbf, 0xaa, 0x46
+	uint32_t hash_len = 16;
+	uint8_t sid_val[] = { // Randomly generated test value
+		0x16, 0x37, 0xfb, 0x9b, 0x83, 0xef, 0xe1, 0xf7, 
+		0x8e, 0x5d, 0xa5, 0x12, 0xb5, 0x75, 0xd7, 0xe1, 
+		0x19, 0x12, 0x58, 0x20, 0x76, 0x5f, 0xb6, 0x06, 
+		0x1c, 0xad, 0x3c, 0xfc, 0xe5, 0x85, 0xbd, 0xfa, 
 	};
 
-	seed.length = hash_len;
-	memcpy(seed.seed, seed_val, seed.length);
-	sid.length = 0;
+	sid.length = 32;
 	memcpy(sid.id, sid_val, sid.length);
 
-	mtl_node_set_init(&nodes, &seed, &sid);
+	mtl_node_set_init(&nodes, &sid);
 
 	assert(nodes.leaf_count == 0);
-	assert(nodes.hash_size == seed.length);
+	assert(nodes.hash_size == hash_len);
 	assert(nodes.tree_pages[0] == NULL);
 	nodes.tree_page_size = 8 * hash_len;
 
@@ -301,6 +288,7 @@ uint8_t mtltest_mtl_node_set_fetch(void)
 
 		// Fetching nodes after insertion should succeed
 		assert(mtl_node_set_fetch(&nodes, index, index, &hash) == MTL_OK);
+		free(hash);
 	}
 
 	// Fetch the different nodes and verify the hash values
@@ -334,30 +322,27 @@ uint8_t mtltest_mtl_node_set_fetch(void)
  */
 uint8_t mtltest_mtl_node_set_get_randomizer(void)
 {
-	SEED seed;
 	SERIESID sid;
 	MTLNODES nodes;
 	uint32_t index;
 	uint8_t buffer[32];
 	uint8_t *buffer_ptr = &buffer[0];
 	uint8_t random[32];
-	uint32_t hash_len = 32;
-	uint8_t sid_val[] = { 0x28, 0xe7, 0x56, 0xf0, 0xb4, 0x61, 0xf6, 0x79 };
-	uint8_t seed_val[] = { 0x66, 0x87, 0x0c, 0x58, 0x1e, 0x05, 0x1e, 0x75,
-		0x06, 0xb5, 0x59, 0x89, 0x75, 0x08, 0xe7, 0x2c,
-		0x03, 0x69, 0x6e, 0x98, 0x22, 0x87, 0x08, 0xe2,
-		0xf1, 0x85, 0xb2, 0xe5, 0x60, 0xbf, 0xaa, 0x46
+	uint32_t hash_len = 16;
+	uint8_t sid_val[] = {  // Randomly generated test value
+		0x16, 0x37, 0xfb, 0x9b, 0x83, 0xef, 0xe1, 0xf7, 
+		0x8e, 0x5d, 0xa5, 0x12, 0xb5, 0x75, 0xd7, 0xe1, 
+		0x19, 0x12, 0x58, 0x20, 0x76, 0x5f, 0xb6, 0x06, 
+		0x1c, 0xad, 0x3c, 0xfc, 0xe5, 0x85, 0xbd, 0xfa, 
 	};
 
-	seed.length = hash_len;
-	memcpy(seed.seed, seed_val, seed.length);
-	sid.length = 0;
+	sid.length = 32;
 	memcpy(sid.id, sid_val, sid.length);
 
-	mtl_node_set_init(&nodes, &seed, &sid);
+	mtl_node_set_init(&nodes, &sid);
 
 	assert(nodes.leaf_count == 0);
-	assert(nodes.hash_size == seed.length);
+	assert(nodes.hash_size == hash_len);
 	assert(nodes.tree_pages[0] == NULL);
 	nodes.tree_page_size = 8 * hash_len;
 
@@ -396,29 +381,26 @@ uint8_t mtltest_mtl_node_set_get_randomizer(void)
  */
 uint8_t mtltest_mtl_node_set_get_randomizer_null(void)
 {
-	SEED seed;
 	SERIESID sid;
 	MTLNODES nodes;
 	uint32_t index;
 	uint8_t buffer[32];
 	uint8_t *buffer_ptr;
-	uint32_t hash_len = 32;
-	uint8_t sid_val[] = { 0x28, 0xe7, 0x56, 0xf0, 0xb4, 0x61, 0xf6, 0x79 };
-	uint8_t seed_val[] = { 0x66, 0x87, 0x0c, 0x58, 0x1e, 0x05, 0x1e, 0x75,
-		0x06, 0xb5, 0x59, 0x89, 0x75, 0x08, 0xe7, 0x2c,
-		0x03, 0x69, 0x6e, 0x98, 0x22, 0x87, 0x08, 0xe2,
-		0xf1, 0x85, 0xb2, 0xe5, 0x60, 0xbf, 0xaa, 0x46
+	uint32_t hash_len = 16;
+	uint8_t sid_val[] = {  // Randomly generated test value
+		0x16, 0x37, 0xfb, 0x9b, 0x83, 0xef, 0xe1, 0xf7, 
+		0x8e, 0x5d, 0xa5, 0x12, 0xb5, 0x75, 0xd7, 0xe1, 
+		0x19, 0x12, 0x58, 0x20, 0x76, 0x5f, 0xb6, 0x06, 
+		0x1c, 0xad, 0x3c, 0xfc, 0xe5, 0x85, 0xbd, 0xfa, 
 	};
 
-	seed.length = hash_len;
-	memcpy(seed.seed, seed_val, seed.length);
-	sid.length = 0;
+	sid.length = 32;
 	memcpy(sid.id, sid_val, sid.length);
 
-	mtl_node_set_init(&nodes, &seed, &sid);
+	mtl_node_set_init(&nodes, &sid);
 
 	assert(nodes.leaf_count == 0);
-	assert(nodes.hash_size == seed.length);
+	assert(nodes.hash_size == hash_len);
 	assert(nodes.tree_pages[0] == NULL);
 	nodes.tree_page_size = 8 * hash_len;
 
@@ -450,7 +432,7 @@ uint8_t mtltest_mtl_node_set_get_randomizer_null(void)
  */
 uint8_t mtltest_mtl_node_id(void)
 {
-	uint32_t output;
+	MTL_INDEX output;
 	assert(mtl_node_set_int_node_id(0, 0, &output) == MTL_OK);
 	assert(output == 0);
 	assert(mtl_node_set_int_node_id(1, 1, &output) == MTL_OK);
@@ -508,7 +490,7 @@ uint8_t mtltest_mtl_node_id(void)
  */
 uint8_t mtltest_mtl_node_id_invalid(void)
 {
-	uint32_t out;
+	MTL_INDEX out;
 	// Null check
 	assert(mtl_node_set_int_node_id(0, 0, NULL) == MTL_NULL_PTR);
 
@@ -542,9 +524,10 @@ uint8_t mtltest_mtl_node_id_invalid(void)
 	assert(mtl_node_set_int_node_id(0, MTL_NODE_SET_MAX_INDEX, &out) == MTL_BAD_PARAM);
 	assert(mtl_node_set_int_node_id(MTL_NODE_SET_MAX_INDEX, MTL_NODE_SET_MAX_INDEX, &out) == MTL_BAD_PARAM);
 	assert(mtl_node_set_int_node_id(MTL_NODE_SET_MAX_INDEX, MTL_NODE_SET_MAX_INDEX + 1, &out) == MTL_BAD_PARAM);
-	assert(mtl_node_set_int_node_id(0, UINT32_MAX, &out) == MTL_BAD_PARAM);
-	assert(mtl_node_set_int_node_id(UINT32_MAX, UINT32_MAX, &out) == MTL_BAD_PARAM);
-	assert(mtl_node_set_int_node_id(UINT32_MAX, UINT32_MAX + 1, &out) == MTL_BAD_PARAM);
+	MTL_INDEX uint_max = (MTL_INDEX)(-1);
+	assert(mtl_node_set_int_node_id(0, uint_max, &out) == MTL_BAD_PARAM);
+	assert(mtl_node_set_int_node_id(uint_max, uint_max, &out) == MTL_BAD_PARAM);
+	assert(mtl_node_set_int_node_id(uint_max, uint_max + 1, &out) == MTL_BAD_PARAM);
 
 	return 0;
 }
@@ -558,9 +541,9 @@ uint8_t mtltest_mtl_lsb(void)
 {
 	uint16_t index;
 
-	// Make sure that all 32 bit positions work
-	for (index = 0; index < 32; index++) {
-		assert(mtl_lsb(1 << index) == index);
+	// Make sure that all bit positions work
+	for (index = 0; index < 8*sizeof(MTL_INDEX); index++) {
+		assert(mtl_lsb(((MTL_INDEX)1) << index) == index);
 	}
 
 	// Test out multiple bit numbers
@@ -568,11 +551,6 @@ uint8_t mtltest_mtl_lsb(void)
 	assert(mtl_lsb(10) == 1);
 	assert(mtl_lsb(0xAAAA0000) == 17);
 	assert(mtl_lsb(0xC0000000) == 30);
-
-	// Test "overflow"
-	for (index = 32; index < 64; index++) {
-		assert(mtl_lsb((1L << index)) == 0xffffffff);
-	}
 
 	return 0;
 }
@@ -621,7 +599,7 @@ uint8_t mtltest_mtl_msb(void)
 
 	// Make sure that all 32 bit positions work
 	for (index = 0; index < 32; index++) {
-		assert(mtl_msb(1 << index) == index);
+		assert(mtl_msb(1ULL << index) == index);
 	}
 
 	// Test out multiple bit numbers
@@ -629,11 +607,6 @@ uint8_t mtltest_mtl_msb(void)
 	assert(mtl_msb(10) == 3);
 	assert(mtl_msb(0xAAAA0000) == 31);
 	assert(mtl_msb(0xC0000000) == 31);
-
-	// Test "overflow"
-	for (index = 32; index < 64; index++) {
-		assert(mtl_msb((1L << index)) == 0);
-	}
 
 	return 0;
 }
@@ -643,18 +616,17 @@ uint8_t mtltest_mtl_msb(void)
  */
 uint8_t mtltest_mtl_node_set_maximum(void)
 {
-	SEED seed;
 	SERIESID sid;
 	MTLNODES nodes;
-	uint32_t index, left_index, right_index, width_index;
+	MTL_INDEX index, left_index, right_index, width_index;
 	uint8_t write_buffer[32], read_buffer[32];
 	uint8_t *hash;
 	uint32_t hash_len = 32;
-	uint8_t sid_val[] = { 0x28, 0xe7, 0x56, 0xf0, 0xb4, 0x61, 0xf6, 0x79 };
-	uint8_t seed_val[] = { 0x66, 0x87, 0x0c, 0x58, 0x1e, 0x05, 0x1e, 0x75,
-		0x06, 0xb5, 0x59, 0x89, 0x75, 0x08, 0xe7, 0x2c,
-		0x03, 0x69, 0x6e, 0x98, 0x22, 0x87, 0x08, 0xe2,
-		0xf1, 0x85, 0xb2, 0xe5, 0x60, 0xbf, 0xaa, 0x46
+	uint8_t sid_val[] = {  // Randomly generated test value
+		0x16, 0x37, 0xfb, 0x9b, 0x83, 0xef, 0xe1, 0xf7, 
+		0x8e, 0x5d, 0xa5, 0x12, 0xb5, 0x75, 0xd7, 0xe1, 
+		0x19, 0x12, 0x58, 0x20, 0x76, 0x5f, 0xb6, 0x06, 
+		0x1c, 0xad, 0x3c, 0xfc, 0xe5, 0x85, 0xbd, 0xfa, 
 	};
 
 	// initialize distinct hash value into buffers
@@ -664,12 +636,10 @@ uint8_t mtltest_mtl_node_set_maximum(void)
 		read_buffer[index] = write_buffer[index];
 	}
 
-	seed.length = hash_len;
-	memcpy(seed.seed, seed_val, seed.length);
-	sid.length = 0;
+	sid.length = 32;
 	memcpy(sid.id, sid_val, sid.length);
 
-	mtl_node_set_init(&nodes, &seed, &sid);
+	mtl_node_set_init(&nodes, &sid);
 
 	// Build complete tree
 	for (width_index = 1; width_index && width_index <= MTL_NODE_SET_MAX_LEAF+1; width_index *= 2)

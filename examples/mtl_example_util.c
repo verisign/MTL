@@ -1,5 +1,5 @@
 /*
-	Copyright (c) 2025, VeriSign, Inc.
+	Copyright (c) 2026, VeriSign, Inc.
 	All rights reserved.
 
 	Redistribution and use in source and binary forms, with or without
@@ -34,292 +34,95 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <ctype.h>
+#include <fcntl.h>
+#include <sys/stat.h>
 
-#include "mtl_util.h"
-#include "mtlverify.h"
 #include "mtl_example_util.h"
 
-#include <openssl/evp.h>
-
 /*****************************************************************
-* Convert a string to upper case in place
-******************************************************************
- * @param data, string to convert (in place)
- * @return Converted string pointer
- */
-char *mtl_str2upper(char *data)
-{
-	char *p = data;
-
-	for (; *p; ++p)
-		*p = toupper(*p);
-	return data;
-}
-
-
-
-/*****************************************************************
-* Convert an encoded buffer to the binary in memory format
-******************************************************************
- * @param input     encoded input buffer
- * @param input_len length of the encoded input buffer
- * @param output    pointer for the output buffer (user frees)
- * @param encoding  format the input buffer is using
- * @return size of the output buffer
- */
-size_t mtl_buffer2bin(uint8_t* input, size_t input_len, uint8_t** output, data_encoding encoding) {
-	uint8_t* buffer = NULL;
-	size_t buffer_size = 0;
-	uint8_t byte_val = 0;
-	char tmp[3];
-	int b64_len = 0;
-	uint8_t b64_buff[MTL_MAX_BUFFER_SIZE];
-	EVP_ENCODE_CTX *ctx = NULL;
-	int status = 0;
-
-	if(encoding == BASE64_STRING) {
-		if(((input_len /4) * 3) >= MTL_MAX_BUFFER_SIZE) {
-			
-			LOG_ERROR("Invalid input length, greater than the buffer size");
-			*output = NULL;
-			return 0;
-		}
-		ctx = EVP_ENCODE_CTX_new();
-
-		EVP_DecodeInit(ctx);
-		status = EVP_DecodeUpdate(ctx, &b64_buff[0], &b64_len, input, input_len);
-		if((status != 0) && (status != 1)) {
-			LOG_ERROR("Unable to decode buffer");
-			*output = NULL;
-			EVP_ENCODE_CTX_free(ctx);
-			return 0;
-		}
-		buffer_size = b64_len;
-		status = EVP_DecodeFinal(ctx, &b64_buff[b64_len], &b64_len);
-		if(status != 1) {
-			LOG_ERROR("Unable to decode buffer");
-			*output = NULL;
-			EVP_ENCODE_CTX_free(ctx);
-			return 0;			
-		}
-		buffer_size += b64_len;
-		buffer = calloc(1, buffer_size);
-		memcpy(buffer, &b64_buff[0], buffer_size);
-		EVP_ENCODE_CTX_free(ctx);
-	} else {
-		if(input_len >= MTL_MAX_BUFFER_SIZE) {
-			
-			LOG_ERROR("Invalid input length, greater than the buffer size");
-			*output = NULL;
-			return 0;
-		}
-
-		if(input_len % 2 != 0) {
-			*output = NULL;
-			return 0;				
-		}
-		buffer_size = input_len/2;
-
-   		for (size_t i = 0; i < input_len; i+=2) {
-			tmp[0] = input[i];
-			tmp[1] = input[i+1];
-			tmp[2] = '\0';
-			if(sscanf(tmp, "%hhx", &byte_val) != 1) {
-				*output = NULL;
-				return 0;		
-			}
-			b64_buff[i/2] = byte_val;
-		}
-		buffer = calloc(1, buffer_size);
-		memcpy(buffer, &b64_buff[0], buffer_size);		
-	}
-	*output = buffer;
-	return buffer_size;
-}
-
-/*****************************************************************
-* Convert and write out the buffer in the appropriate format
-******************************************************************
- * @param buffer        Byte buffer to print
- * @param buffer_len    Length of the byte buffer
- * @param output        Output stream to use
- * @param encoding      Enum type indicating if data is BASE64 or HEX
- * @param newline       Flag that indicates if a newline should be added to the end
+ * Load a file into a memory buffer and return the size
+ ******************************************************************
  * @return None
  */
-#define B64_BLOCK_SIZE 3
-void mtl_write_buffer(uint8_t* buffer, size_t buffer_len, FILE* output, data_encoding encoding, bool newline) {
-    uint8_t output_buff[B64_BLOCK_SIZE+1];
-	size_t i = 0;
-	size_t start = 0;
-	size_t length = 0;
+MTLLIB_STATUS buffer_from_file(char* filename, MTLLIB_BUFFER** buffer) {
+    FILE* infile = NULL;
+	int fd = -1;
+    size_t filesize = 0;
+	uint8_t *buffer_raw = NULL;
 
-    // Output the ladder buffer
-    if(encoding == BASE64_STRING) {
-		// Encode in blocks (each block is 3 bytes)		
-		i = buffer_len;
-		while(i > 0) {
-			start = buffer_len - i;
-			if(i >= B64_BLOCK_SIZE) {
-				length = B64_BLOCK_SIZE;
-			} else {
-				length = i;
-			}
-			EVP_EncodeBlock(&output_buff[0], &buffer[start], length);
-			fprintf(output,"%s", output_buff);
-			i = i - length;
+    if((filename != NULL) && (buffer != NULL)) {
+		fd = open(filename, O_RDONLY, S_IRUSR | S_IWUSR); 
+		if (fd < 0) { 
+			perror("Error opening file");
+            return MTLLIB_BUFFER_ISSUE; 
+		} 
+        infile = fdopen(fd, "rb");
+        if (infile == NULL) {
+            perror("Error opening file");
+            return MTLLIB_BUFFER_ISSUE;
+        }
+
+        fseek(infile, 0, SEEK_END);
+        filesize = ftell(infile);
+        fseek(infile, 0, SEEK_SET);
+
+        buffer_raw = malloc(filesize);
+        if(buffer_raw == NULL) {
+            perror("Error allocating memory");
+            return 0;
+        }
+        fread(buffer_raw, 1, filesize, infile);
+        fclose(infile);
+
+		// We create a new data buffer and append because we want the data to be  
+		// freed when the buffer is deconstructed, i.e.
+		// mtllib_buffer_initialize(buffer, filesize, buffer_raw) would make the
+		// caller responsible for freeing both buffer_raw and buffer
+		if (mtllib_buffer_initialize(buffer, filesize, NULL) != MTLLIB_OK) {
+			free(buffer_raw);
+			return MTLLIB_BUFFER_ISSUE;
 		}
-    } else {
-		// Encode in bytes		
-        for(i=0; i<buffer_len; i++) {
-            fprintf(output,"%02x", buffer[i]);
-        }					
-    }	
-    if(newline) {
-        fprintf(output,"\n");
-    }	
-}
-
-static void verbose_print_block(char* descript, FILE* stream) {
-	uint32_t len = 45 - strlen(descript);
-	uint32_t i = 0;
-
-	if(strlen(descript) == 0) {
-		fprintf(stream, " ========");
-		for(i=0; i<len+2; i++) {
-			fprintf(stream, "=");
+		if (mtllib_buffer_append(*buffer, buffer_raw, filesize) != MTLLIB_OK) {
+			free(buffer_raw);
+			return MTLLIB_BUFFER_ISSUE;
 		}
-		fprintf(stream," \n\n");
-	} else {
-		fprintf(stream," ======== %s ", descript);
-		for(i=0; i<len; i++) {
-			fprintf(stream,"=");
-		}
-		fprintf(stream," \n");
+
+    }
+	else {
+		return MTLLIB_NULL_PARAMS;
 	}
+
+	free(buffer_raw);
+    return MTLLIB_OK;
 }
 
+/*****************************************************************
+ * Write a memory buffer to a file
+ ******************************************************************
+ * @return MTLLIB_OK on success, other on error
+ */
+MTLLIB_STATUS buffer_to_file(char* filename, MTLLIB_BUFFER* buffer) {
+	FILE* output_file = NULL;
+	int fd = -1;
 
-static void verbose_print_buffer(char* descript, uint8_t* buffer, uint32_t buffer_len, FILE* stream) {
-	uint32_t i =0;
-
-    fprintf(stream, "    %15s - ", descript);
-	for(i=0; i<buffer_len; i++) {
-		fprintf(stream , "%02x", buffer[i]);
+	if((filename != NULL) && (buffer != NULL)) {
+		fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR); 
+		if (fd < 0) { 
+			perror("Error opening file");
+            return MTLLIB_BUFFER_ISSUE; // Exit with an error code 
+		} 
+        output_file = fdopen(fd, "wb");
+        if (output_file == NULL) {
+            perror("Error opening file");
+            return MTLLIB_BUFFER_ISSUE; // Exit with an error code
+        }
 	}
-	fprintf(stream, "\n");
-}
-
-
-static void verbose_print_hex(char* descript, uint32_t value, FILE* stream) {
-	fprintf(stream, "    %15s - %02x\n", descript, value);
-}
-
-static void verbose_print_number(char* descript, uint32_t value, FILE* stream) {
-	fprintf(stream, "    %15s - %02d\n", descript, value);
-}
-
-static void verbose_print_string(char* descript, char* str, FILE* stream) {
-	fprintf(stream, "    %15s - %s\n", descript, str);
-}
-
-static void verbose_print_rung(char* descript, uint32_t l, uint32_t r, uint8_t* buffer, uint32_t buffer_len, FILE* stream) {
-	uint32_t i =0;
-
-    fprintf(stream, "    %15s (%d,%d) ", descript, l, r);
-	for(i=0; i<buffer_len; i++) {
-		fprintf(stream , "%02x", buffer[i]);
-	}
-	fprintf(stream, "\n");
-}
-
-
-void mtl_print_auth_path(AUTHPATH* auth_path, RANDOMIZER* mtl_rand, uint32_t hash_len, FILE *stream) {
-	uint32_t hash;
-
-	if(stream != NULL) {
-		if(auth_path != NULL) {
-			verbose_print_block("Authentication Path", stream);
-			if(mtl_rand != NULL) {
-				verbose_print_buffer("Randomizer", mtl_rand->value, hash_len, stream);
-			}
-			verbose_print_hex("Flags", auth_path->flags, stream);
-			verbose_print_buffer("SID",  auth_path->sid.id, auth_path->sid.length, stream);		
-			verbose_print_number("Leaf Index", auth_path->leaf_index, stream);
-			verbose_print_number("Left Rung", auth_path->rung_left, stream);
-			verbose_print_number("Right Rung", auth_path->rung_right, stream);
-			verbose_print_number("Hash Count", auth_path->sibling_hash_count, stream);
-			for(hash=0; hash<auth_path->sibling_hash_count; hash++) {
-				verbose_print_buffer("Path Hash", &auth_path->sibling_hash[hash*hash_len], hash_len, stream);
-			}
-			verbose_print_block("", stream);
-		}
-	}
-}
-
-void mtl_print_ladder(LADDER* ladder, FILE *stream) {
-	RUNG* r = NULL;
-	uint16_t rc = 0;
-
-	if(stream != NULL) {
-		verbose_print_block("Ladder Values", stream);
-		verbose_print_hex("Flags", ladder->flags, stream);
-		verbose_print_buffer("SID",  ladder->sid.id, ladder->sid.length, stream);		
-		verbose_print_number("Rung Count", ladder->rung_count, stream);
-		for(rc=0; rc<ladder->rung_count; rc++) {
-			r = (RUNG *) ((uint8_t *) ladder->rungs + (sizeof(RUNG) * rc));
-			verbose_print_rung("Ladder Rung", r->left_index, r->right_index, r->hash, r->hash_length, stream);
-		}
-		verbose_print_block("", stream); 
-	}
-}
-
-void mtl_print_ladder_signature(uint8_t* sig, size_t sig_len, FILE* stream) {
-	if(stream != NULL) {
-		verbose_print_block("Ladder Signature", stream);
-		verbose_print_number("Signature Len", sig_len, stream);
-		verbose_print_buffer("Signature", sig, sig_len, stream);
-		verbose_print_block("", stream);        
-	}
-}
-
-void mtl_print_rung(RUNG* rung, FILE* stream) {
-	if(stream != NULL) {
-		verbose_print_block("Ladder Rung Values", stream);
-		verbose_print_rung("Ladder Rung", rung->left_index, rung->right_index, rung->hash, rung->hash_length, stream);
-		verbose_print_block("", stream); 		
-	}
-}
-
-
-void mtl_print_message(uint8_t* message, uint32_t message_len, FILE* stream) {
-	if(stream != NULL) {	
-		verbose_print_block("Signature Message", stream);
-		verbose_print_number("Msg Length", message_len, stream);
-		verbose_print_buffer("Msg Bytes", message, message_len, stream);
-		verbose_print_block("", stream); 		
-	}
-}
-
-
-void mtl_print_signature_scheme(MTL_ALGORITHM_PROPS* algo, FILE* stream) {
-	if(stream != NULL) {
-		verbose_print_block("MTL Signature Scheme", stream);
-		verbose_print_string("Scheme", algo->name, stream);
-		verbose_print_number("Security Param", algo->sec_param, stream);
-		verbose_print_hex("Randomizing", algo->randomize, stream);
-		verbose_print_string("Underlying Sig", algo->scheme_str, stream);
-		verbose_print_number("OID Length", algo->oid_len, stream);
-		verbose_print_buffer("OID Value", algo->oid, algo->oid_len, stream);
-		verbose_print_block("", stream); 	
-	}
-}
-
-void mtl_print_mtl_buffer(char* label, uint8_t *buffer, uint32_t buffer_length, FILE* stream) {
-	if(stream != NULL) {
-		verbose_print_block(label, stream);	
-		verbose_print_number("Length", buffer_length, stream);			
-		verbose_print_buffer("Value", buffer, buffer_length, stream);
-		verbose_print_block("", stream); 			
-	}
+    if (output_file == NULL) {
+        return MTLLIB_BUFFER_ISSUE;
+    }            
+    if(fwrite(mtllib_buffer_data_ptr(buffer), mtllib_buffer_in_use(buffer), 1, output_file) == 0) {
+        return MTLLIB_BUFFER_ISSUE;
+    }
+    fclose(output_file);
+    return MTLLIB_OK;
 }

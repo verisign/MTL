@@ -3,7 +3,7 @@ MTL Reference Library Implementation based on [draft-harvey-cfrg-mtl-mode-00](ht
 
 ## Dependencies
 * libcrypto from openssl version 3.1.0 or newer (or substitute crypto operations to replace the spx_funcs.c functions)
-* liboqs version 0.7.2 or newer (for the examples).  To include the liboqs library as a statically linked library change the -loqs to -l:_path_/liboqs.a in the examples/Makefile.am. 
+* liboqs version 0.14.0 or newer (for the examples).  To include the liboqs library as a statically linked library change the -loqs to -l:_path_/liboqs.a in the examples/Makefile.am. 
 * Applications using the MTL Reference Library should also link with the C math library (-lm)
 
 ## Configuring the build environment
@@ -17,16 +17,16 @@ Alternatively, `make check` can be run to exercise the mtltest tool.
 
 ## Running the example application
 (After building the library and tools) run the mtl example applications `cd examples; ./test.sh` or use one of the three utities:
-* `mtlkeygen [options] key_file algorithm [context_str]`
-* `mtlsign   mtlsign [options] key_file msg_file_1 msg_file_2 ...`
-* `mtlverify [options] algorithm_str key_file message_str signature_str [ladder_str]`
+* `mtlkeygen [options] filename algorithm_str`
+* `mtlsign [options] key_file msg_file_1 msg_file_2 ...`
+* `mtlverify [options] algorithm_str key_file message_file signature_file [ladder_file]`
 
 Running each tool with -h (or no parameters) will give the help output which describes the parameters for that utility.
 Note: Algorithm should be one of the supported algorithm strings [README_SCHEMES.md](README_SCHEMES.md)
 
 ### MTLKEYGEN
 ```
-Usage: mtlkeygen [options] key_file algorithm [context_str]
+Usage: mtlkeygen filename algorithm_str
 
     RETURN VALUE
       0 on success or number for error
@@ -35,27 +35,77 @@ Usage: mtlkeygen [options] key_file algorithm [context_str]
       -h    Print this tool usage help message
 
     PARAMETERS
-      key_file      The key_file name/path where the generated key should be stored
-      algorithm     The algorithms string for type of key to generate
+      filename      The name to use for key files
+      algorithm_str The algorithm string for type of key to generate
                     See the list of supported algorithm strings below
-      context_str   An optional context string to use with this key
 
     EXAMPLE USAGE
-      mtlkeygen ./testkey.key SPHINCS+-MTL-SHA2-128S-SIMPLE
+      mtlkeygen my_key SLH-DSA-SHAKE-128s-MTL-SHAKE-128
 
     SUPPORTED ALGORITHMS
-      SPHINCS+-MTL-SHAKE-128S-SIMPLE
-      SPHINCS+-MTL-SHAKE-128F-SIMPLE
-      SPHINCS+-MTL-SHAKE-192S-SIMPLE
-      SPHINCS+-MTL-SHAKE-192F-SIMPLE
-      SPHINCS+-MTL-SHAKE-256S-SIMPLE
-      SPHINCS+-MTL-SHAKE-256F-SIMPLE
-      SPHINCS+-MTL-SHA2-128S-SIMPLE
-      SPHINCS+-MTL-SHA2-128F-SIMPLE
-      SPHINCS+-MTL-SHA2-192S-SIMPLE
-      SPHINCS+-MTL-SHA2-192F-SIMPLE
-      SPHINCS+-MTL-SHA2-256S-SIMPLE
-      SPHINCS+-MTL-SHA2-256F-SIMPLE
+      SLH-DSA-SHAKE-128s-MTL-SHAKE-128
+      SLH-DSA-SHAKE-128f-MTL-SHAKE-128
+      SLH-DSA-SHAKE-192s-MTL-SHAKE-192
+      SLH-DSA-SHAKE-192f-MTL-SHAKE-192
+      SLH-DSA-SHAKE-256s-MTL-SHAKE-256
+      SLH-DSA-SHAKE-256f-MTL-SHAKE-256
+      SLH-DSA-SHA2-128s-MTL-SHA2-128
+      SLH-DSA-SHA2-128f-MTL-SHA2-128
+      SLH-DSA-SHA2-192s-MTL-SHA2-192
+      SLH-DSA-SHA2-192f-MTL-SHA2-192
+      SLH-DSA-SHA2-256s-MTL-SHA2-256
+      SLH-DSA-SHA2-256f-MTL-SHA2-256
+      ML-DSA-44-MTL-SHAKE-128
+      ML-DSA-65-MTL-SHAKE-192
+      ML-DSA-87-MTL-SHAKE-256
+      Falcon-padded-512-MTL-SHAKE-128
+      Falcon-padded-1024-MTL-SHAKE-256
+      MAYO-1-MTL-SHAKE-128
+      MAYO-2-MTL-SHAKE-128
+      MAYO-3-MTL-SHAKE-192
+      MAYO-5-MTL-SHAKE-256
+      cross-rsdp-128-balanced-MTL-SHAKE-128
+      cross-rsdp-128-fast-MTL-SHAKE-128
+      cross-rsdp-128-small-MTL-SHAKE-128
+      cross-rsdp-192-balanced-MTL-SHAKE-192
+      cross-rsdp-192-fast-MTL-SHAKE-192
+      cross-rsdp-192-small-MTL-SHAKE-192
+      cross-rsdp-256-balanced-MTL-SHAKE-256
+      cross-rsdp-256-fast-MTL-SHAKE-256
+      cross-rsdp-256-small-MTL-SHAKE-256
+      cross-rsdpg-128-balanced-MTL-SHAKE-128
+      cross-rsdpg-128-fast-MTL-SHAKE-128
+      cross-rsdpg-128-small-MTL-SHAKE-128
+      cross-rsdpg-192-balanced-MTL-SHAKE-192
+      cross-rsdpg-192-fast-MTL-SHAKE-192
+      cross-rsdpg-192-small-MTL-SHAKE-192
+      cross-rsdpg-256-balanced-MTL-SHAKE-256
+      cross-rsdpg-256-fast-MTL-SHAKE-256
+      cross-rsdpg-256-small-MTL-SHAKE-256
+      OV-Is-MTL-SHAKE-128
+      OV-Ip-MTL-SHAKE-128
+      OV-III-MTL-SHAKE-192
+      OV-V-MTL-SHAKE-256
+      OV-Is-pkc-MTL-SHAKE-128
+      OV-Ip-pkc-MTL-SHAKE-128
+      OV-III-pkc-MTL-SHAKE-192
+      OV-V-pkc-MTL-SHAKE-256
+      OV-Is-pkc-skc-MTL-SHAKE-128
+      OV-Ip-pkc-skc-MTL-SHAKE-128
+      OV-III-pkc-skc-MTL-SHAKE-192
+      OV-V-pkc-skc-MTL-SHAKE-256
+      SNOVA_24_5_4-MTL-SHAKE-128
+      SNOVA_24_5_4_SHAKE-MTL-SHAKE-128
+      SNOVA_24_5_4_esk-MTL-SHAKE-128
+      SNOVA_24_5_4_SHAKE_esk-MTL-SHAKE-128
+      SNOVA_37_17_2-MTL-SHAKE-128
+      SNOVA_25_8_3-MTL-SHAKE-128
+      SNOVA_56_25_2-MTL-SHAKE-192
+      SNOVA_49_11_3-MTL-SHAKE-192
+      SNOVA_37_8_4-MTL-SHAKE-192
+      SNOVA_24_5_5-MTL-SHAKE-192
+      SNOVA_60_10_4-MTL-SHAKE-256
+      SNOVA_29_6_5-MTL-SHAKE-256
 ```
 
 ### MTLSIGN
@@ -66,60 +116,104 @@ Usage: mtlkeygen [options] key_file algorithm [context_str]
       0 on success or number for error
 
     OPTIONS
-      -b            Message files and signatures use base64 encoding rather than binary data in hex format
       -h            Print this help message
-      -i= NodeID    Get the latest signature info for a NodeID rather than signing a message
-      -l            Produce full signatures instead of condensed signature
-      -v            Use verbose output
+      -r            Reconstruct full signatures from the same ladder rather
+                      than generating a fresh signed ladder each time
 
     PARAMETERS
-      key_file      The key_file name/path where the generated key should be read/updated
+      key_file      The key_file name/path where the generated key should be read
       msg_file_x    File that contains the message to sign (in binary or base64 format)
 
     EXAMPLE USAGE
-      mtlsign -l -i 0 testkey.key message1.bin message2.bin
+      mtlsign ./testkey.key ./message1.bin ./message2.bin
 ```
 
 ### MTLVERIFY
 ```
-Usage: mtlverify [options] algorithm_str key_file message_str signature_str [ladder_str]
+Usage: mtlverify [options] algorithm_str key_file message_file signature_file [ladder_file]
 
     RETURN VALUE
       0 on success or number for error
 
     OPTIONS
-      -b              Message files and signatures use base64 encoding rather than binary data in hex format
       -h              Print this help message
-      -l= ladder_file File that contains the signed ladder, rather than passing in as a parameter string
-      -q              Do not print non-error messages      -s              Output the ladder signature with the validated ladder
+      -t              Trust the cached ladder (do not verify the signature on it)
       -v              Use verbose output
 
     PARAMETERS
-      algorithm_str The algorithms string for type of key to generate
-                    See the list of supported algorithm strings below
-      key_file      The key_file name/path where the generated key should be read
-      message_str   Hex string that represents the message to verify (or base64 format if used with -b option)
-      signature_str Hex string that represents the signature on the message (or base64 format if used with -b option)
-      ladder_str    Optinal hex string that represents the signed ladder on the message
+      algorithm_str  The algorithms string identifying the algorithm to verify
+      pubkey_file    The file name/path where the public key should be read
+      message_file   File holding the message to verify
+      signature_file File holding the signature on the message (full or condensed)
+      ladder_file    (Optional) holds the signed ladder on the message. Required if signature_file contains a condensed signature
 
-    EXAMPLE USAGE (line break added for readability)
-      mtlverify -q SPHINCS+-MTL-SHA2-128S-SIMPLE d568a8c5f343b9fac1ab74367430d417db4d31cb0ad26f6d82af66eaae60928f  883814c80c
-                4310b4f0e8 4b8b1e65b9f506be27c61b82dc03add300008b7da2ad29a8de3c000000000000000000000007000396354149b979b8b1c9
-                81a305129b903fd91f511efc5d83497e54a7c5bd75224cfdfeb120de9dff0eede77b71b2fff0ec -l ./testkey.key
+    EXAMPLE USAGE
+      mtlverify ML-DSA-44-MTL-SHAKE-128 keyfile.pub message.txt message.condensed_sig keyfile.ladder
 
     SUPPORTED ALGORITHMS
-      SPHINCS+-MTL-SHAKE-128S-SIMPLE
-      SPHINCS+-MTL-SHAKE-128F-SIMPLE
-      SPHINCS+-MTL-SHAKE-192S-SIMPLE
-      SPHINCS+-MTL-SHAKE-192F-SIMPLE
-      SPHINCS+-MTL-SHAKE-256S-SIMPLE
-      SPHINCS+-MTL-SHAKE-256F-SIMPLE
-      SPHINCS+-MTL-SHA2-128S-SIMPLE
-      SPHINCS+-MTL-SHA2-128F-SIMPLE
-      SPHINCS+-MTL-SHA2-192S-SIMPLE
-      SPHINCS+-MTL-SHA2-192F-SIMPLE
-      SPHINCS+-MTL-SHA2-256S-SIMPLE
-      SPHINCS+-MTL-SHA2-256F-SIMPLE
+      SLH-DSA-SHAKE-128s-MTL-SHAKE-128
+      SLH-DSA-SHAKE-128f-MTL-SHAKE-128
+      SLH-DSA-SHAKE-192s-MTL-SHAKE-192
+      SLH-DSA-SHAKE-192f-MTL-SHAKE-192
+      SLH-DSA-SHAKE-256s-MTL-SHAKE-256
+      SLH-DSA-SHAKE-256f-MTL-SHAKE-256
+      SLH-DSA-SHA2-128s-MTL-SHA2-128
+      SLH-DSA-SHA2-128f-MTL-SHA2-128
+      SLH-DSA-SHA2-192s-MTL-SHA2-192
+      SLH-DSA-SHA2-192f-MTL-SHA2-192
+      SLH-DSA-SHA2-256s-MTL-SHA2-256
+      SLH-DSA-SHA2-256f-MTL-SHA2-256
+      ML-DSA-44-MTL-SHAKE-128
+      ML-DSA-65-MTL-SHAKE-192
+      ML-DSA-87-MTL-SHAKE-256
+      Falcon-padded-512-MTL-SHAKE-128
+      Falcon-padded-1024-MTL-SHAKE-256
+      MAYO-1-MTL-SHAKE-128
+      MAYO-2-MTL-SHAKE-128
+      MAYO-3-MTL-SHAKE-192
+      MAYO-5-MTL-SHAKE-256
+      cross-rsdp-128-balanced-MTL-SHAKE-128
+      cross-rsdp-128-fast-MTL-SHAKE-128
+      cross-rsdp-128-small-MTL-SHAKE-128
+      cross-rsdp-192-balanced-MTL-SHAKE-192
+      cross-rsdp-192-fast-MTL-SHAKE-192
+      cross-rsdp-192-small-MTL-SHAKE-192
+      cross-rsdp-256-balanced-MTL-SHAKE-256
+      cross-rsdp-256-fast-MTL-SHAKE-256
+      cross-rsdp-256-small-MTL-SHAKE-256
+      cross-rsdpg-128-balanced-MTL-SHAKE-128
+      cross-rsdpg-128-fast-MTL-SHAKE-128
+      cross-rsdpg-128-small-MTL-SHAKE-128
+      cross-rsdpg-192-balanced-MTL-SHAKE-192
+      cross-rsdpg-192-fast-MTL-SHAKE-192
+      cross-rsdpg-192-small-MTL-SHAKE-192
+      cross-rsdpg-256-balanced-MTL-SHAKE-256
+      cross-rsdpg-256-fast-MTL-SHAKE-256
+      cross-rsdpg-256-small-MTL-SHAKE-256
+      OV-Is-MTL-SHAKE-128
+      OV-Ip-MTL-SHAKE-128
+      OV-III-MTL-SHAKE-192
+      OV-V-MTL-SHAKE-256
+      OV-Is-pkc-MTL-SHAKE-128
+      OV-Ip-pkc-MTL-SHAKE-128
+      OV-III-pkc-MTL-SHAKE-192
+      OV-V-pkc-MTL-SHAKE-256
+      OV-Is-pkc-skc-MTL-SHAKE-128
+      OV-Ip-pkc-skc-MTL-SHAKE-128
+      OV-III-pkc-skc-MTL-SHAKE-192
+      OV-V-pkc-skc-MTL-SHAKE-256
+      SNOVA_24_5_4-MTL-SHAKE-128
+      SNOVA_24_5_4_SHAKE-MTL-SHAKE-128
+      SNOVA_24_5_4_esk-MTL-SHAKE-128
+      SNOVA_24_5_4_SHAKE_esk-MTL-SHAKE-128
+      SNOVA_37_17_2-MTL-SHAKE-128
+      SNOVA_25_8_3-MTL-SHAKE-128
+      SNOVA_56_25_2-MTL-SHAKE-192
+      SNOVA_49_11_3-MTL-SHAKE-192
+      SNOVA_37_8_4-MTL-SHAKE-192
+      SNOVA_24_5_5-MTL-SHAKE-192
+      SNOVA_60_10_4-MTL-SHAKE-256
+      SNOVA_29_6_5-MTL-SHAKE-256
 
 ```
 

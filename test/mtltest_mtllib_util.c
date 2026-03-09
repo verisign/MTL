@@ -1,5 +1,5 @@
 /*
-    Copyright (c) 2025, VeriSign, Inc.
+    Copyright (c) 2026, VeriSign, Inc.
     All rights reserved.
 
     Redistribution and use in source and binary forms, with or without
@@ -30,13 +30,13 @@
     ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
     POSSIBILITY OF SUCH DAMAGE.
 */
-#include <config.h>
 #include <stdio.h>
 #include <assert.h>
 #include <string.h>
 
 #include "mtltest.h"
 #include "mtllib_util.h"
+#include "mtltest_test_vectors.h"
 
 // Prototypes for testing functions
 uint8_t mtlltest_mtllib_util_get_algorithm_props_valid(void);
@@ -115,6 +115,7 @@ uint8_t mtlltest_mtllib_util_get_algorithm_props_invalid(void)
 {
 	assert(mtllib_util_get_algorithm_props("SPHINCS+") == NULL);
 	assert(mtllib_util_get_algorithm_props("SLH-DSA-MTL-SHAKE-128R") == NULL);
+	assert(mtllib_util_get_algorithm_props(NULL) == NULL);
 	return 0;
 }
 
@@ -137,19 +138,78 @@ uint8_t mtlltest_mtllib_key_write_algorithms(void)
 	size_t algo_buffer_len = 0;
 	FILE *test_file = NULL;
 	char output[] = "\
-      SLH-DSA-MTL-SHAKE-128S\n      SLH-DSA-MTL-SHAKE-128F\n\
-      SLH-DSA-MTL-SHAKE-192S\n      SLH-DSA-MTL-SHAKE-192F\n\
-      SLH-DSA-MTL-SHAKE-256S\n      SLH-DSA-MTL-SHAKE-256F\n\
-      SLH-DSA-MTL-SHA2-128S\n      SLH-DSA-MTL-SHA2-128F\n\
-      SLH-DSA-MTL-SHA2-192S\n      SLH-DSA-MTL-SHA2-192F\n\
-      SLH-DSA-MTL-SHA2-256S\n      SLH-DSA-MTL-SHA2-256F\n";
+      SLH-DSA-SHAKE-128s-MTL-SHAKE-128\n\
+      SLH-DSA-SHAKE-128f-MTL-SHAKE-128\n\
+      SLH-DSA-SHAKE-192s-MTL-SHAKE-192\n\
+      SLH-DSA-SHAKE-192f-MTL-SHAKE-192\n\
+      SLH-DSA-SHAKE-256s-MTL-SHAKE-256\n\
+      SLH-DSA-SHAKE-256f-MTL-SHAKE-256\n\
+      SLH-DSA-SHA2-128s-MTL-SHA2-128\n\
+      SLH-DSA-SHA2-128f-MTL-SHA2-128\n\
+      SLH-DSA-SHA2-192s-MTL-SHA2-192\n\
+      SLH-DSA-SHA2-192f-MTL-SHA2-192\n\
+      SLH-DSA-SHA2-256s-MTL-SHA2-256\n\
+      SLH-DSA-SHA2-256f-MTL-SHA2-256\n\
+      ML-DSA-44-MTL-SHAKE-128\n\
+      ML-DSA-65-MTL-SHAKE-192\n\
+      ML-DSA-87-MTL-SHAKE-256\n\
+      Falcon-padded-512-MTL-SHAKE-128\n\
+      Falcon-padded-1024-MTL-SHAKE-256\n\
+      MAYO-1-MTL-SHAKE-128\n\
+      MAYO-2-MTL-SHAKE-128\n\
+      MAYO-3-MTL-SHAKE-192\n\
+      MAYO-5-MTL-SHAKE-256\n\
+      cross-rsdp-128-balanced-MTL-SHAKE-128\n\
+      cross-rsdp-128-fast-MTL-SHAKE-128\n\
+      cross-rsdp-128-small-MTL-SHAKE-128\n\
+      cross-rsdp-192-balanced-MTL-SHAKE-192\n\
+      cross-rsdp-192-fast-MTL-SHAKE-192\n\
+      cross-rsdp-192-small-MTL-SHAKE-192\n\
+      cross-rsdp-256-balanced-MTL-SHAKE-256\n\
+      cross-rsdp-256-fast-MTL-SHAKE-256\n\
+      cross-rsdp-256-small-MTL-SHAKE-256\n\
+      cross-rsdpg-128-balanced-MTL-SHAKE-128\n\
+      cross-rsdpg-128-fast-MTL-SHAKE-128\n\
+      cross-rsdpg-128-small-MTL-SHAKE-128\n\
+      cross-rsdpg-192-balanced-MTL-SHAKE-192\n\
+      cross-rsdpg-192-fast-MTL-SHAKE-192\n\
+      cross-rsdpg-192-small-MTL-SHAKE-192\n\
+      cross-rsdpg-256-balanced-MTL-SHAKE-256\n\
+      cross-rsdpg-256-fast-MTL-SHAKE-256\n\
+      cross-rsdpg-256-small-MTL-SHAKE-256\n\
+      OV-Is-MTL-SHAKE-128\n\
+      OV-Ip-MTL-SHAKE-128\n\
+      OV-III-MTL-SHAKE-192\n\
+      OV-V-MTL-SHAKE-256\n\
+      OV-Is-pkc-MTL-SHAKE-128\n\
+      OV-Ip-pkc-MTL-SHAKE-128\n\
+      OV-III-pkc-MTL-SHAKE-192\n\
+      OV-V-pkc-MTL-SHAKE-256\n\
+      OV-Is-pkc-skc-MTL-SHAKE-128\n\
+      OV-Ip-pkc-skc-MTL-SHAKE-128\n\
+      OV-III-pkc-skc-MTL-SHAKE-192\n\
+      OV-V-pkc-skc-MTL-SHAKE-256\n\
+      SNOVA_24_5_4-MTL-SHAKE-128\n\
+      SNOVA_24_5_4_SHAKE-MTL-SHAKE-128\n\
+      SNOVA_24_5_4_esk-MTL-SHAKE-128\n\
+      SNOVA_24_5_4_SHAKE_esk-MTL-SHAKE-128\n\
+      SNOVA_37_17_2-MTL-SHAKE-128\n\
+      SNOVA_25_8_3-MTL-SHAKE-128\n\
+      SNOVA_56_25_2-MTL-SHAKE-192\n\
+      SNOVA_49_11_3-MTL-SHAKE-192\n\
+      SNOVA_37_8_4-MTL-SHAKE-192\n\
+      SNOVA_24_5_5-MTL-SHAKE-192\n\
+      SNOVA_60_10_4-MTL-SHAKE-256\n\
+      SNOVA_29_6_5-MTL-SHAKE-256\n";
+	size_t expected_len = strlen(output);
 
+	  
 	test_file = open_memstream(&algo_buffer, &algo_buffer_len);
 	assert(test_file != NULL);
 	assert(mtllib_key_write_algorithms(test_file) == MTLLIB_OK);
 	fclose(test_file);
 
-	assert(algo_buffer_len == strlen(output));
+	assert(algo_buffer_len == expected_len);
 	assert(memcmp(output, algo_buffer, algo_buffer_len) == 0);
 
 	free(algo_buffer);
@@ -173,21 +233,16 @@ uint8_t mtlltest_mtllib_key_write_algorithms_null(void)
 uint8_t mtlltest_mtllib_util_setup_sig_scheme(void)
 {
 	MTLLIB_CTX *test_ctx = NULL;
-	SEED seed;
 	SERIESID sid;
 	size_t index;
 	uint32_t zero_count;
 
 	// Setup variables
 	test_ctx = calloc(1, sizeof(MTLLIB_CTX));
-	test_ctx->algo_params = mtllib_util_get_algorithm_props("SLH-DSA-MTL-SHAKE-128S");
+	test_ctx->algo_params = mtllib_util_get_algorithm_props(MTL_TEST_VECTOR_SCHEME_NAME);
 
 	memset(&sid, 0, sizeof(SERIESID));
-	sid.length = 8;
-	memset(&seed, 0xAA, sizeof(SEED));
-
-	seed.length = 32;
-	memset(seed.seed, 0xAA, 32);
+	sid.length = MTL_SID_SIZE;
 
 	assert(test_ctx->signature == NULL);
 	assert(test_ctx->secret_key == NULL);
@@ -197,7 +252,7 @@ uint8_t mtlltest_mtllib_util_setup_sig_scheme(void)
 	assert(test_ctx->mtl == NULL);
 
 	// Test making a new key from scratch without a context string
-	assert(mtllib_util_setup_sig_scheme(LIBOQS, test_ctx, NULL, 0, NULL, 0, NULL, NULL, NULL) == MTLLIB_OK);
+	assert(mtllib_util_setup_sig_scheme(LIBOQS, test_ctx, NULL, 0, NULL, 0, NULL) == MTLLIB_OK);
 	assert(test_ctx->signature != NULL);
 	assert(test_ctx->secret_key != NULL);
 	zero_count = 0;
@@ -209,9 +264,9 @@ uint8_t mtlltest_mtllib_util_setup_sig_scheme(void)
 		}
 	}
 	assert(zero_count > 16);
-	assert(test_ctx->secret_key_len == 64);
+	assert(test_ctx->secret_key_len == MTL_TEST_VECTOR_SCHEME_SK_LEN);
 	assert(test_ctx->public_key != NULL);
-	assert(test_ctx->public_key_len == 32);
+	assert(test_ctx->public_key_len == MTL_TEST_VECTOR_SCHEME_PK_LEN);
 	zero_count = 0;
 	for (index = 0; index < test_ctx->public_key_len; index++)
 	{
@@ -222,27 +277,6 @@ uint8_t mtlltest_mtllib_util_setup_sig_scheme(void)
 	}
 	assert(zero_count > 16);
 	assert(test_ctx->mtl != NULL);
-	assert(test_ctx->mtl->ctx_str == NULL);
-	mtllib_key_free(test_ctx);
-
-	test_ctx = calloc(1, sizeof(MTLLIB_CTX));
-	test_ctx->algo_params = mtllib_util_get_algorithm_props("SLH-DSA-MTL-SHAKE-128F");
-	assert(test_ctx->signature == NULL);
-	assert(test_ctx->secret_key == NULL);
-	assert(test_ctx->secret_key_len == 0);
-	assert(test_ctx->public_key == NULL);
-	assert(test_ctx->public_key_len == 0);
-	assert(test_ctx->mtl == NULL);
-
-	// Test making a new key from scratch with a context string
-	assert(mtllib_util_setup_sig_scheme(LIBOQS, test_ctx, NULL, 0, NULL, 0, "Test", NULL, NULL) == MTLLIB_OK);
-	assert(test_ctx->signature != NULL);
-	assert(test_ctx->secret_key != NULL);
-	assert(test_ctx->secret_key_len == 64);
-	assert(test_ctx->public_key != NULL);
-	assert(test_ctx->public_key_len == 32);
-	assert(test_ctx->mtl != NULL);
-	assert(test_ctx->mtl->ctx_str != NULL);
 	mtllib_key_free(test_ctx);
 
 	return 0;
@@ -258,11 +292,11 @@ uint8_t mtlltest_mtllib_util_setup_sig_scheme_bad_library(void)
 
 	// Setup variables
 	test_ctx = calloc(1, sizeof(MTLLIB_CTX));
-	test_ctx->algo_params = mtllib_util_get_algorithm_props("SLH-DSA-MTL-SHAKE-128S");
+	test_ctx->algo_params = mtllib_util_get_algorithm_props(MTL_TEST_VECTOR_SCHEME_NAME);
 
 	// Test making a new key from scratch without a context string with unsupported provider
-	assert(mtllib_util_setup_sig_scheme(OPENSSL, test_ctx, NULL, 0, NULL, 0, NULL, NULL, NULL) == MTLLIB_UNSUPPORTED_FEATURE);
-	assert(mtllib_util_setup_sig_scheme(NONE, test_ctx, NULL, 0, NULL, 0, NULL, NULL, NULL) == MTLLIB_BAD_ALGORITHM);
+	assert(mtllib_util_setup_sig_scheme(OPENSSL, test_ctx, NULL, 0, NULL, 0, NULL) == MTLLIB_UNSUPPORTED_FEATURE);
+	assert(mtllib_util_setup_sig_scheme(NONE, test_ctx, NULL, 0, NULL, 0, NULL) == MTLLIB_BAD_ALGORITHM);
 
 	mtllib_key_free(test_ctx);
 	return 0;
@@ -278,10 +312,10 @@ uint8_t mtlltest_mtllib_util_setup_sig_scheme_null_context(void)
 
 	// Setup variables
 	test_ctx = calloc(1, sizeof(MTLLIB_CTX));
-	test_ctx->algo_params = mtllib_util_get_algorithm_props("SLH-DSA-MTL-SHAKE-128S");
+	test_ctx->algo_params = mtllib_util_get_algorithm_props(MTL_TEST_VECTOR_SCHEME_NAME);
 
 	// Test making a new key from scratch without a context string with unsupported provider
-	assert(mtllib_util_setup_sig_scheme(LIBOQS, NULL, NULL, 0, NULL, 0, NULL, NULL, NULL) == MTLLIB_NULL_PARAMS);
+	assert(mtllib_util_setup_sig_scheme(LIBOQS, NULL, NULL, 0, NULL, 0, NULL) == MTLLIB_NULL_PARAMS);
 
 	mtllib_key_free(test_ctx);
 	return 0;
@@ -294,25 +328,22 @@ uint8_t mtlltest_mtllib_util_setup_sig_scheme_null_context(void)
 uint8_t mtlltest_mtllib_util_setup_sig_scheme_with_keys_provided(void)
 {
 	MTLLIB_CTX *test_ctx = NULL;
-	SEED seed;
 	SERIESID sid;
 	size_t index;
-	uint8_t secret_key[64];
-	uint8_t public_key[32];
+	uint8_t secret_key[MTL_TEST_VECTOR_SCHEME_SK_LEN];
+	uint8_t public_key[MTL_TEST_VECTOR_SCHEME_PK_LEN];
+	size_t sk_len = MTL_TEST_VECTOR_SCHEME_SK_LEN;
+	size_t pk_len = MTL_TEST_VECTOR_SCHEME_PK_LEN;
 
 	// Setup variables
 	test_ctx = calloc(1, sizeof(MTLLIB_CTX));
-	test_ctx->algo_params = mtllib_util_get_algorithm_props("SLH-DSA-MTL-SHAKE-128S");
+	test_ctx->algo_params = mtllib_util_get_algorithm_props(MTL_TEST_VECTOR_SCHEME_NAME);
 
 	memset(&sid, 0, sizeof(SERIESID));
-	sid.length = 8;
-	memset(&seed, 0xAA, sizeof(SEED));
+	sid.length = MTL_SID_SIZE;
 
-	seed.length = 32;
-	memset(seed.seed, 0xAA, 32);
-
-	memset(&secret_key[0], 0xCC, 64);
-	memset(&public_key[0], 0x55, 32);
+	memset(&secret_key[0], 0xCC, sk_len);
+	memset(&public_key[0], 0x55, pk_len);
 	assert(test_ctx->signature == NULL);
 	assert(test_ctx->secret_key == NULL);
 	assert(test_ctx->secret_key_len == 0);
@@ -320,23 +351,22 @@ uint8_t mtlltest_mtllib_util_setup_sig_scheme_with_keys_provided(void)
 	assert(test_ctx->public_key_len == 0);
 	assert(test_ctx->mtl == NULL);
 
-	// Test making a new key from scratch without a context string
-	assert(mtllib_util_setup_sig_scheme(LIBOQS, test_ctx, &secret_key[0], 64, &public_key[0], 32, NULL, &seed, &sid) == MTLLIB_OK);
+	// Test making a new key from scratch
+	assert(mtllib_util_setup_sig_scheme(LIBOQS, test_ctx, &secret_key[0], sk_len, &public_key[0], pk_len, &sid) == MTLLIB_OK);
 	assert(test_ctx->signature != NULL);
 	assert(test_ctx->secret_key != NULL);
 	for (index = 0; index < test_ctx->secret_key_len; index++)
 	{
 		assert(secret_key[index] == test_ctx->secret_key[index]);
 	}
-	assert(test_ctx->secret_key_len == 64);
+	assert(test_ctx->secret_key_len == sk_len);
 	assert(test_ctx->public_key != NULL);
-	assert(test_ctx->public_key_len == 32);
+	assert(test_ctx->public_key_len == pk_len);
 	for (index = 0; index < test_ctx->public_key_len; index++)
 	{
 		assert(public_key[index] == test_ctx->public_key[index]);
 	}
 	assert(test_ctx->mtl != NULL);
-	assert(test_ctx->mtl->ctx_str == NULL);
 	mtllib_key_free(test_ctx);
 
 	return 0;
@@ -349,21 +379,16 @@ uint8_t mtlltest_mtllib_util_setup_sig_scheme_with_keys_provided(void)
 uint8_t mtlltest_mtllib_util_setup_sig_scheme_with_keys_provided_mismatch(void)
 {
 	MTLLIB_CTX *test_ctx = NULL;
-	SEED seed;
 	SERIESID sid;
 	uint8_t secret_key[64];
 	uint8_t public_key[32];
 
 	// Setup variables
 	test_ctx = calloc(1, sizeof(MTLLIB_CTX));
-	test_ctx->algo_params = mtllib_util_get_algorithm_props("SLH-DSA-MTL-SHAKE-128S");
+	test_ctx->algo_params = mtllib_util_get_algorithm_props(MTL_TEST_VECTOR_SCHEME_NAME);
 
 	memset(&sid, 0, sizeof(SERIESID));
-	sid.length = 8;
-	memset(&seed, 0xAA, sizeof(SEED));
-
-	seed.length = 32;
-	memset(seed.seed, 0xAA, 32);
+	sid.length = MTL_SID_SIZE;
 
 	memset(&secret_key[0], 0xCC, 64);
 	memset(&public_key[0], 0x55, 32);
@@ -375,7 +400,7 @@ uint8_t mtlltest_mtllib_util_setup_sig_scheme_with_keys_provided_mismatch(void)
 	assert(test_ctx->mtl == NULL);
 
 	// Test making a new key from scratch without a context string
-	assert(mtllib_util_setup_sig_scheme(LIBOQS, test_ctx, &secret_key[0], 32, &public_key[0], 16, NULL, &seed, &sid) == MTLLIB_MEMORY_ERROR);
+	assert(mtllib_util_setup_sig_scheme(LIBOQS, test_ctx, &secret_key[0], 32, &public_key[0], 16, &sid) == MTLLIB_MEMORY_ERROR);
 	mtllib_key_free(test_ctx);
 
 	return 0;

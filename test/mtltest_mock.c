@@ -1,5 +1,5 @@
 /*
-	Copyright (c) 2025, VeriSign, Inc.
+	Copyright (c) 2026, VeriSign, Inc.
 	All rights reserved.
 
 	Redistribution and use in source and binary forms, with or without
@@ -35,9 +35,10 @@
 #include "mtl.h"
 
 /**
- * Mock function for message hashing operations
+ * Mock function for message hashing operations:
+ * return 0
  */
-uint8_t mtl_test_hash_msg(void *parameters,
+MTLSTATUS mtl_test_hash_msg(void *parameters,
 			  SERIESID * sid,
 			  uint32_t node_id,
 			  uint8_t * randomizer,
@@ -47,173 +48,68 @@ uint8_t mtl_test_hash_msg(void *parameters,
 			  uint32_t hash_length, char * ctx,
 			  uint8_t ** rmtl, uint32_t * rmtl_len)
 {
-	EVP_MD *hash_func = NULL;
-	EVP_MD_CTX *mdctx = NULL;
-	unsigned int hash_len;
-	uint8_t * rmtl_buffer;
+	// for these tests these parameters are not used
+	parameters = parameters;
+	sid = sid;
+	node_id = node_id;
+	randomizer = randomizer;
+	randomizer_len = randomizer_len;
+	msg_buffer = msg_buffer;
+	msg_length = msg_length;
+	ctx = ctx;
+	rmtl = rmtl;
+	rmtl_len = rmtl_len;
+
+	memset(hash, 0, hash_length);
+	return MTL_OK;
+						
+}
+
+/**
+ * Mock function for leaf hashing operations:
+ * first hash_len bytes of message
+ */
+MTLSTATUS mtl_test_hash_leaf(SERIESID * sid,
+				      	MTL_INDEX node_index,
+				      	uint8_t * msg_buffer, uint32_t msg_len,
+					  	uint8_t * ctx, uint32_t ctx_len,
+				      	uint8_t * rand, uint32_t rand_len,
+				      	uint8_t * hash_out, uint32_t hash_len)
+{
+	sid = sid;
+	node_index = node_index;
+	msg_buffer = msg_buffer;
+	msg_len = msg_len;
+	ctx = ctx;
+	ctx_len = ctx_len;
+	rand = rand;
+	rand_len = rand_len;
+			
+	memcpy(hash_out, msg_buffer, hash_len);
+	return MTL_OK;
+						
+}
+
+/**
+ * Mock function for internal hashing operations:
+ * XOR of both child nodes
+ */
+MTLSTATUS mtl_test_hash_int(SERIESID * sid,
+				  		uint32_t adrs_left,
+				  		uint32_t adrs_right,
+				  		uint8_t * hash_left,
+				  		uint8_t * hash_right, uint8_t * hash_out,
+				  		uint32_t hash_len)
+{
 	// for these tests these parameters are not used
 	sid = sid;
-	node_id = node_id;
-	ctx=ctx;
-
-	parameters = parameters;
-	hash_length = hash_length;
-
-	hash_func = (EVP_MD *) EVP_sha256();
-	mdctx = EVP_MD_CTX_new();
-
-	if (1 != EVP_DigestInit_ex(mdctx, hash_func, NULL)) {
-		EVP_MD_CTX_free(mdctx);
-		LOG_ERROR("Unable to allocate hash function");
-		// ERROR                
-		return 1;
+	adrs_left = adrs_left;
+	adrs_right = adrs_right;
+		
+	memcpy(hash_out, hash_left, hash_len);
+	uint32_t i;
+	for( i = 0; i < hash_len; i++ ) { 
+		hash_out[i] ^= hash_right[i];
 	}
-	if (1 != EVP_DigestUpdate(mdctx, randomizer, randomizer_len)) {
-		EVP_MD_CTX_free(mdctx);
-		LOG_ERROR("Unable add message to digest");
-		// ERROR                
-		return 1;
-	}
-	if (1 != EVP_DigestUpdate(mdctx, msg_buffer, msg_length)) {
-		EVP_MD_CTX_free(mdctx);
-		LOG_ERROR("Unable add message to digest");
-		// ERROR                
-		return 1;
-	}
-	if (1 != EVP_DigestFinal_ex(mdctx, hash, &hash_len)) {
-		EVP_MD_CTX_free(mdctx);
-		LOG_ERROR("Unable to finalize digest");
-		// ERROR                
-		return 1;
-	}
-
-	if(*rmtl_len == 0) {
-		rmtl_buffer = malloc(randomizer_len);
-		memcpy(rmtl_buffer, randomizer, randomizer_len);
-		*rmtl = rmtl_buffer;
-		*rmtl_len = randomizer_len;
-	}
-
-	EVP_MD_CTX_free(mdctx);
-	return 0;
-}
-
-/**
- * Mock function for leaf hashing operations
- */
-uint8_t mtl_test_hash_leaf(void *params,
-			   SERIESID * sid,
-			   uint32_t node_id,
-			   uint8_t * msg_buffer,
-			   uint32_t msg_length,
-			   uint8_t * hash, uint32_t hash_length)
-{
-	EVP_MD *hash_func = NULL;
-	EVP_MD_CTX *mdctx = NULL;
-	unsigned int hash_len;
-	hash_length = hash_length;
-	uint8_t tmp[4];
-
-	params = params;
-	sid = sid;
-	node_id = node_id;
-
-	hash_func = (EVP_MD *) EVP_sha256();
-	mdctx = EVP_MD_CTX_new();
-
-	if (1 != EVP_DigestInit_ex(mdctx, hash_func, NULL)) {
-		EVP_MD_CTX_free(mdctx);
-		LOG_ERROR("Unable to allocate hash function");
-		// ERROR                
-		return 1;
-	}
-	memcpy(&tmp[0], &node_id, 4);
-	if (1 != EVP_DigestUpdate(mdctx, tmp, 4)) {
-		EVP_MD_CTX_free(mdctx);
-		LOG_ERROR("Unable add message to digest");
-		// ERROR                
-		return 1;
-	}
-	if (1 != EVP_DigestUpdate(mdctx, msg_buffer, msg_length)) {
-		EVP_MD_CTX_free(mdctx);
-		LOG_ERROR("Unable add message to digest");
-		// ERROR                
-		return 1;
-	}
-	if (1 != EVP_DigestFinal_ex(mdctx, hash, &hash_len)) {
-		EVP_MD_CTX_free(mdctx);
-		LOG_ERROR("Unable to finalize digest");
-		// ERROR                
-		return 1;
-	}
-
-	EVP_MD_CTX_free(mdctx);
-	return 0;
-}
-
-/**
- * Mock function for internal hashing operations
- */
-uint8_t mtl_test_hash_node(void *params,
-			   SERIESID * sid,
-			   uint32_t left_index,
-			   uint32_t right_index,
-			   uint8_t * left_hash,
-			   uint8_t * right_hash,
-			   uint8_t * hash, uint32_t hash_length)
-{
-	EVP_MD *hash_func = NULL;
-	EVP_MD_CTX *mdctx = NULL;
-	unsigned int hash_len;
-	uint8_t tmp[4];
-
-	params = params;
-	left_index = left_index;
-	right_index = right_index;
-	sid = sid;
-
-	hash_func = (EVP_MD *) EVP_sha256();
-	mdctx = EVP_MD_CTX_new();
-
-	if (1 != EVP_DigestInit_ex(mdctx, hash_func, NULL)) {
-		EVP_MD_CTX_free(mdctx);
-		LOG_ERROR("Unable to allocate hash function");
-		// ERROR                
-		return 1;
-	}
-	memcpy(&tmp[0], &left_index, 4);
-	if (1 != EVP_DigestUpdate(mdctx, tmp, 4)) {
-		EVP_MD_CTX_free(mdctx);
-		LOG_ERROR("Unable add message to digest");
-		// ERROR                
-		return 1;
-	}
-	memcpy(&tmp[0], &right_index, 4);
-	if (1 != EVP_DigestUpdate(mdctx, tmp, 4)) {
-		EVP_MD_CTX_free(mdctx);
-		LOG_ERROR("Unable add message to digest");
-		// ERROR                
-		return 1;
-	}
-	if (1 != EVP_DigestUpdate(mdctx, left_hash, hash_length)) {
-		EVP_MD_CTX_free(mdctx);
-		LOG_ERROR("Unable add message to digest");
-		// ERROR                
-		return 1;
-	}
-	if (1 != EVP_DigestUpdate(mdctx, right_hash, hash_length)) {
-		EVP_MD_CTX_free(mdctx);
-		LOG_ERROR("Unable add message to digest");
-		// ERROR                
-		return 1;
-	}
-	if (1 != EVP_DigestFinal_ex(mdctx, hash, &hash_len)) {
-		EVP_MD_CTX_free(mdctx);
-		LOG_ERROR("Unable to finalize digest");
-		// ERROR  
-		return 1;
-	}
-
-	EVP_MD_CTX_free(mdctx);
-	return 0;
+	return MTL_OK;
 }

@@ -1,5 +1,5 @@
 /*
-	Copyright (c) 2025, VeriSign, Inc.
+	Copyright (c) 2026, VeriSign, Inc.
 	All rights reserved.
 
 	Redistribution and use in source and binary forms, with or without
@@ -40,11 +40,10 @@
 *  MTL node set function to initalize a MTLNS structure
 ******************************************************************
  * @param nodes: Pointer to MTL node context to initalize
- * @param seed: The seed to use for this MTL node set
  * @param sid: series id to use for this MTLNS
  * @return none
  */
-void mtl_node_set_init(MTLNODES * nodes, SEED *seed, SERIESID * sid)
+void mtl_node_set_init(MTLNODES * nodes, SERIESID * sid)
 {
 	uint16_t index;
 	// Reserved for future needs
@@ -56,7 +55,7 @@ void mtl_node_set_init(MTLNODES * nodes, SEED *seed, SERIESID * sid)
 	}
 
 	nodes->leaf_count = 0;
-	nodes->hash_size = seed->length;
+	nodes->hash_size = sid->length/2;
 	nodes->tree_page_size = MTL_TREE_PAGE_SIZE;
 	// Initalize the tree pages
 	for (index = 0; index < MTL_TREE_MAX_PAGES; index++) {
@@ -111,10 +110,10 @@ void mtl_node_set_free(MTLNODES * nodes)
  * @param hash: hash value to insert
  * @return MTL_OK if successful
  */
-MTLSTATUS mtl_node_set_insert(MTLNODES * nodes, uint32_t left, uint32_t right,
+MTLSTATUS mtl_node_set_insert(MTLNODES * nodes, MTL_INDEX left, MTL_INDEX right,
 			    uint8_t * hash)
 {
-	uint32_t index;
+	MTL_INDEX index;
 	uint16_t page;
 	uint64_t offset;
 
@@ -163,11 +162,11 @@ MTLSTATUS mtl_node_set_insert(MTLNODES * nodes, uint32_t left, uint32_t right,
  * @return MTL_OK on success
  */
 MTLSTATUS mtl_node_set_insert_randomizer(MTLNODES * nodes,
-				       uint32_t leaf_index, uint8_t * rand)
+				       MTL_INDEX leaf_index, uint8_t * rand)
 {
 	uint16_t page;
 	uint64_t offset;
-	uint32_t index;
+	MTL_INDEX index;
 
 	if ((nodes == NULL) || (rand == NULL)) {
 		LOG_ERROR("Null parameters provided");
@@ -211,7 +210,7 @@ MTLSTATUS mtl_node_set_insert_randomizer(MTLNODES * nodes,
  * @param hash: pointer to fill with the hash value (caller must free)
  * @return MTL_OK if successful
  */
-MTLSTATUS mtl_node_set_fetch(MTLNODES * nodes, uint32_t left, uint32_t right,
+MTLSTATUS mtl_node_set_fetch(MTLNODES * nodes, MTL_INDEX left, MTL_INDEX right,
 			   uint8_t ** hash)
 {
 	if ((nodes == NULL) || (hash == NULL)) {
@@ -219,7 +218,7 @@ MTLSTATUS mtl_node_set_fetch(MTLNODES * nodes, uint32_t left, uint32_t right,
 		return MTL_BAD_PARAM;
 	}
 
-	uint32_t index;
+	MTL_INDEX index;
 	if (mtl_node_set_int_node_id(left, right, &index) != MTL_OK)
 	{
 		LOG_ERROR("Attempted to fetch invalid node");
@@ -258,12 +257,12 @@ MTLSTATUS mtl_node_set_fetch(MTLNODES * nodes, uint32_t left, uint32_t right,
  * @param rand: pointer to fill with the hash value (caller must free)
  * @return MTL_OK if successful
  */
-MTLSTATUS mtl_node_set_get_randomizer(MTLNODES * nodes, uint32_t leaf,
+MTLSTATUS mtl_node_set_get_randomizer(MTLNODES * nodes, MTL_INDEX leaf,
 				    uint8_t ** rand)
 {
 	uint16_t page;
 	uint64_t offset;
-	uint32_t index;
+	MTL_INDEX index;
 
 	if ((nodes == NULL) || (rand == NULL)) {
 		LOG_ERROR("Null parameters provided");
@@ -309,9 +308,9 @@ MTLSTATUS mtl_node_set_get_randomizer(MTLNODES * nodes, uint32_t leaf,
  * @param right: right index of the tested subtree
  * @return MTL_OK if the indices are valid, MTL_BAD_PARAM if not
  */
-MTLSTATUS mtl_node_is_valid_subtree(uint32_t left, uint32_t right)
+MTLSTATUS mtl_node_is_valid_subtree(MTL_INDEX left, MTL_INDEX right)
 {
-	uint32_t prefix_bitmask, postfix_bitmask, i;
+	MTL_INDEX prefix_bitmask, postfix_bitmask, i;
 
 	// Subtree must have non-negative size
 	if ( right < left )
@@ -324,15 +323,15 @@ MTLSTATUS mtl_node_is_valid_subtree(uint32_t left, uint32_t right)
 		return MTL_BAD_PARAM;
 	}
 	// Subtree is defined by a common prefix
-	prefix_bitmask = 0xffffffff;
-	for (i = 0; i < 32; i++)
+	prefix_bitmask = MTL_NODE_SET_MAX_INDEX+1;
+	for (i = 0; i < 8*sizeof(MTL_INDEX); i++)
 	{
 		if( (left & prefix_bitmask) == (right & prefix_bitmask) )
 		{
 			break;
 		}
 		// remove bits on the right until the prefixes match
-		prefix_bitmask -= (1 << i);
+		prefix_bitmask -= (1ULL << i);
 	}
 	// Leftmost node of subtree is all 0 after prefix; rightmost is all 1
 	postfix_bitmask = ~prefix_bitmask;
@@ -355,7 +354,7 @@ MTLSTATUS mtl_node_is_valid_subtree(uint32_t left, uint32_t right)
  * @return MTL_OK if successful, and *return_index set
  * 			MTL_ERROR if <left,right> is not a valid node
  */
-MTLSTATUS mtl_node_set_int_node_id(uint32_t left, uint32_t right, uint32_t * return_index)
+MTLSTATUS mtl_node_set_int_node_id(MTL_INDEX left, MTL_INDEX right, MTL_INDEX * return_index)
 {
 	if ( return_index == NULL ) 
 	{
@@ -381,9 +380,17 @@ MTLSTATUS mtl_node_set_int_node_id(uint32_t left, uint32_t right, uint32_t * ret
  * @param number: number to evaluate
  * @return number of 1's in the number
  */
-uint32_t mtl_bit_width(uint32_t number)
+uint32_t mtl_bit_width(MTL_INDEX number)
 {
-	return __builtin_popcountl(number);
+    #if MTL_INDEX_LEN == SIZEOF_INT
+        return __builtin_popcount(number);
+    #elif MTL_INDEX_LEN == SIZEOF_LONG
+        return __builtin_popcountl(number);
+    #elif MTL_INDEX_LEN == SIZEOF_LONG_LONG
+        return __builtin_popcountll(number);
+    #else
+        #error "Unsupported MTL_INDEX size"
+    #endif
 }
 
 /*****************************************************************
@@ -392,9 +399,17 @@ uint32_t mtl_bit_width(uint32_t number)
  * @param number: number to evaluate
  * @return index of the least significant bit
  */
-uint32_t mtl_lsb(uint32_t number)
+uint32_t mtl_lsb(MTL_INDEX number)
 {
-	return __builtin_ffsl(number) - 1;
+	#if MTL_INDEX_LEN == SIZEOF_INT
+        return __builtin_ffs(number) - 1;
+	#elif MTL_INDEX_LEN == SIZEOF_LONG
+        return __builtin_ffsl(number) - 1;
+	#elif MTL_INDEX_LEN == SIZEOF_LONG_LONG
+        return __builtin_ffsll(number) - 1;
+	#else
+        #error "Unsupported MTL_INDEX size"
+	#endif
 }
 
 /*****************************************************************
@@ -403,9 +418,17 @@ uint32_t mtl_lsb(uint32_t number)
  * @param number: number to evaluate
  * @return index of the most significant bit
  */
-uint32_t mtl_msb(uint32_t number)
+uint32_t mtl_msb(MTL_INDEX number)
 {
 	if (number == 0)
 		return 0;
-	return (sizeof(uint32_t) * 8) - __builtin_clz(number) - 1;
+    #if MTL_INDEX_LEN == SIZEOF_INT
+        return (sizeof(MTL_INDEX) * 8) - __builtin_clz(number) - 1;
+    #elif MTL_INDEX_LEN == SIZEOF_LONG
+        return (sizeof(MTL_INDEX) * 8) - __builtin_clzl(number) - 1;
+    #elif MTL_INDEX_LEN == SIZEOF_LONG_LONG
+        return (sizeof(MTL_INDEX) * 8) - __builtin_clzll(number) - 1;
+    #else
+        #error "Unsupported MTL_INDEX size"
+    #endif
 }

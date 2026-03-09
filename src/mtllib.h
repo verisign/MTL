@@ -1,5 +1,5 @@
 /*
-    Copyright (c) 2025, VeriSign, Inc.
+    Copyright (c) 2026, VeriSign, Inc.
     All rights reserved.
 
     Redistribution and use in source and binary forms, with or without
@@ -42,6 +42,14 @@
 #include <stdint.h>
 #include <oqs/sig.h>
 #include "mtl.h"
+#include "mtllib_buffer.h"
+#include "mtllib_status.h"
+
+/** Context used for signing ladders 
+* \todo update to real fixed customization string once MTL_OID is assigned
+ */
+#define MTL_SIGNING_CTX_STR_LEN 7
+#define MTL_SIGNING_CTX_STR ((const uint8_t *)"OID_MTL")
 
 typedef enum MTL_HASH_ALGORITHM
 {
@@ -71,44 +79,8 @@ typedef struct MTL_ALGORITHM_PROPS
     MTL_HASH_ALGORITHM hash_algo;
     MTL_RANDOMIZER randomize;
     MTL_CRYPTO_LIBRARY library;
-    uint8_t sid_len;
     char *scheme_str;
-    uint8_t oid_len;
-    uint8_t oid[16];
 } MTL_ALGORITHM_PROPS;
-
-typedef enum MTLLIB_STATUS
-{
-    // Success status
-    MTLLIB_OK = 0,
-    // Failure where null parameters were passed to a function
-    MTLLIB_NULL_PARAMS = 1,
-    // Faiure where the algorithm ID, hash algorithm, or 
-    //     underlying signature scheme is not recognized
-    MTLLIB_BAD_ALGORITHM = 2,
-    // Failure where memory is unable to be allocated or managed
-    MTLLIB_MEMORY_ERROR = 3,
-    // Failure where a feature is not yet supported but has a
-    //     place holder for possible future use
-    MTLLIB_UNSUPPORTED_FEATURE = 4,
-    // Failure where a record field is invalid. Can be due to
-    //     unable to read random bytes or a buffer is missing the
-    //     data (e.g. authpath should have 4 - 16 byte hashes but
-    //     only has 8 bytes)
-    MTLLIB_BAD_VALUE = 5,
-    // Failures related to the mtllib_sign operations (e.g.
-    //     operations that need secret material to do the operations)
-    MTLLIB_SIGN_FAIL = 6, 
-    // Failures related to crypto operations that indicate the
-    //     signature is not valid    
-    MTLLIB_BOGUS_CRYPTO = 7,
-    // Failures where no ladder can be used to verify an auth path.
-    //     May need to get a new ladder or auth path
-    MTLLIB_NO_LADDER = 8,
-    // Failures related to crypto operations where validity cannot
-    //     be determined (e.g. missing something needed to verify)
-    MTLLIB_INDETERMINATE = 9,
-} MTLLIB_STATUS;
 
 typedef struct MTLLIB_CTX
 {
@@ -125,17 +97,12 @@ typedef struct MTL_HANDLE
 {
     uint8_t sid[EVP_MAX_MD_SIZE];
     size_t sid_len;
-    uint32_t leaf_index;
+    MTL_INDEX leaf_index;
 } MTL_HANDLE;
 
 #define RANDOMIZER_FLAG 0x01
 
 // Function Macros
-#define PKSEED_INIT(ptr, value, len)  \
-    {                                 \
-        ptr.length = len;             \
-        memcpy(ptr.seed, value, len); \
-    }
 #define PKROOT_INIT(ptr, value, len) \
     {                                \
         ptr.length = len;            \
@@ -156,7 +123,7 @@ typedef struct MTL_HANDLE
     {                                         \
         if (curr < size)                      \
         {                                     \
-            printf("ERROR: Buffer error\n");  \
+            LOG_ERROR("Buffer error");  \
             if (ctx != NULL)                  \
             {                                 \
                 free(ctx);                    \
@@ -170,18 +137,25 @@ typedef struct MTL_HANDLE
  * MTL Library New Key
  * @param keystr the string identifier for the desired algorithm
  * @param ctx pointer to what will be allocated as the MTL library key context
- * @param ctx_str the optional MTL context string
  * @return MTLLIB_STATUS MTLLIB_OK if successful
  */
-MTLLIB_STATUS mtllib_key_new(char *keystr, MTLLIB_CTX **ctx, char *ctx_str);
+MTLLIB_STATUS mtllib_key_new(char *keystr, MTLLIB_CTX **ctx);
+
+/**
+ * MTL Library Get Public Key Length
+ * @param ctx pointer to the MTL library key context
+ * @return size_t Byte length of the public key
+ */
+size_t mtllib_pubkey_to_buffer_length(MTLLIB_CTX *ctx);
 
 /**
  * MTL Library Get Public Key
  * @param ctx pointer to the MTL library key context
- * @param pubkey pointer to the existing public key byte array (user does not free)
+ * @param pubkey MTLLIB_BUFFER containing the existing public key byte array
+ *              which has been initalized by mtllib_buffer_initialize.
  * @return size_t Byte length of the public key
  */
-size_t mtllib_key_get_pubkey_bytes(MTLLIB_CTX *ctx, uint8_t **pubkey);
+MTLLIB_STATUS mtllib_pubkey_to_buffer(MTLLIB_CTX *ctx, MTLLIB_BUFFER *pubkey);
 
 /**
  * MTL Library Key Free
@@ -194,45 +168,61 @@ void mtllib_key_free(MTLLIB_CTX *ctx);
 /**
  * MTL Library Get Public Key from key parameters
  * @param keystr the string identifier for the desired algorithm
+ * @param pubkey MTLLIB Buffer of public key data
  * @param ctx pointer to what will be allocated as the MTL library key context
- * @param ctx_str the optional MTL context string
- * @param pubkey byte array of public key data
- * @param pubkey_len length in bytes of the public key data
- * @param sid byte array of series id data
- * @param sig_len length in bytes of the series id data
+ * @param sid_ptr byte array of series id data
  * @return MTLLIB_STATUS MTLLIB_OK if successful
  * @return None
  */
-MTLLIB_STATUS mtllib_key_pubkey_from_params(char *keystr, MTLLIB_CTX **ctx, char *ctx_str,
-                                   uint8_t *pubkey, size_t pubkey_len, uint8_t *sid_ptr, size_t sid_len);
+MTLLIB_STATUS mtllib_pubkey_from_buffer(char *keystr, MTLLIB_CTX **ctx, MTLLIB_BUFFER *pubkey, uint8_t *sid_ptr);
 
 
 /**
  * MTL Library Key from Buffer
- * @param buffer input buffer holding the key
- * @param buffer_len the length of the input buffer
+ * @param buffer MTLLIB input buffer holding the key
  * @param ctx MTL context created from the buffer
  * @return MTLLIB_STATUS MTLLIB_OK if successful
  */
-MTLLIB_STATUS mtllib_key_from_buffer(uint8_t *buffer, size_t buffer_len, MTLLIB_CTX **ctx);
+MTLLIB_STATUS mtllib_key_from_buffer(MTLLIB_BUFFER *buffer, MTLLIB_CTX **ctx);
+
 
 /**
  * MTL Library Key to Buffer
  * @param ctx    MTL context to write to the buffer
- * @param buffer output buffer holding the key bytes
  * @return size_t size of the key buffer
  */
-size_t mtllib_key_to_buffer(MTLLIB_CTX *ctx, uint8_t **buffer);
+size_t mtllib_key_to_buffer_length(MTLLIB_CTX *ctx);
+
+/**
+ * MTL Library Key to Buffer
+ * @param ctx    MTL context to write to the buffer
+ * @param buffer MTLLIB output buffer holding the key bytes
+ * @return size_t size of the key buffer
+ */
+MTLLIB_STATUS mtllib_key_to_buffer(MTLLIB_CTX *ctx, MTLLIB_BUFFER *buffer);
+
+/**
+ * MTL Library append a message to the node set with default empty ctx_str
+ * @param ctx      MTL context to use
+ * @param msg      input message buffer
+ * @param mtl_node handle for the appended message
+ * @return MTLLIB_STATUS MTLLIB_OK if successful
+ */
+MTLLIB_STATUS mtllib_sign_append(MTLLIB_CTX *ctx, 
+                                    MTLLIB_BUFFER *msg,
+                                    MTL_HANDLE **mtl_node);
 
 /**
  * MTL Library append a message to the node set
  * @param ctx      MTL context to use
  * @param msg      input message buffer
- * @param msg_len  length of the input message buffer
+ * @param ctx_str  input context string buffer
  * @param mtl_node handle for the appended message
  * @return MTLLIB_STATUS MTLLIB_OK if successful
  */
-MTLLIB_STATUS mtllib_sign_append(MTLLIB_CTX *ctx, uint8_t *msg, size_t msg_len, MTL_HANDLE **mtl_node);
+MTLLIB_STATUS mtllib_sign_append_with_ctx_str(MTLLIB_CTX *ctx, 
+                                    MTLLIB_BUFFER *msg, MTLLIB_BUFFER *ctx_str, 
+                                    MTL_HANDLE **mtl_node);
 
 /**
  * MTL Library free a MTL handle
@@ -242,53 +232,135 @@ MTLLIB_STATUS mtllib_sign_append(MTLLIB_CTX *ctx, uint8_t *msg, size_t msg_len, 
 void mtllib_sign_free_handle(MTL_HANDLE **mtl_node);
 
 /**
+ * MTL Library Get Public Key Length
+ * @param ctx pointer to the MTL library key context
+ * @return size_t Byte length of the public key
+ */
+size_t mtllib_sign_get_condensed_sig_length(MTLLIB_CTX *ctx, MTL_HANDLE *handle);
+
+/**
  * MTL Library get the condensed signature for a handle
- * @param ctx     input buffer holding the key
+ * @param ctx     pointer to the MTL library key context
  * @param handle  handle to the signed message
  * @param sig     pointer to fill with the signature bytes
  * @param sig_len pointer to set to the signature bytes length
  * @return MTLLIB_STATUS MTLLIB_OK if successful
  */
-MTLLIB_STATUS mtllib_sign_get_condensed_sig(MTLLIB_CTX *ctx, MTL_HANDLE *handle, uint8_t **sig, size_t *sig_len);
+MTLLIB_STATUS mtllib_sign_get_condensed_sig(MTLLIB_CTX *ctx, MTL_HANDLE *handle, MTLLIB_BUFFER *sig);
+
+/**
+ * MTL Library get the signed ladder length
+ * @param ctx pointer to the MTL library key context
+ * @return Length of a signed ladder for ctx, or 0 if unsuccessful
+ */
+size_t mtllib_sign_get_signed_ladder_length(MTLLIB_CTX *ctx);
 
 /**
  * MTL Library get the signed ladder
- * @param ctx        input buffer holding the key
+ * @param ctx        pointer to the MTL library key context
  * @param ladder     pointer to allocate and fill with the signed ladder bytes
  * @param ladder_len pointer to set to the signed ladder bytes length
  * @return MTLLIB_STATUS MTLLIB_OK if successful
  */
-MTLLIB_STATUS mtllib_sign_get_signed_ladder(MTLLIB_CTX *ctx, uint8_t **ladder, size_t *ladder_len);
+MTLLIB_STATUS mtllib_sign_get_signed_ladder(MTLLIB_CTX *ctx, MTLLIB_BUFFER *ladder);
+
+/**
+ * MTL Library get the length of a full signature for a handle
+ * @param ctx     pointer to the MTL library key context
+ * @param handle  handle to the signed message
+ * @return length of the full signature, or 0 on error
+ */
+size_t mtllib_sign_get_full_sig_length(MTLLIB_CTX *ctx, MTL_HANDLE *handle);
 
 /**
  * MTL Library get the full signature for a handle
- * @param ctx     input buffer holding the key
+ * @param ctx     pointer to the MTL library key context
  * @param handle  handle to the signed message
  * @param sig     pointer to fill with the signature bytes
- * @param sig_len pointer to set to the signature bytes length
  * @return MTLLIB_STATUS MTLLIB_OK if successful
  */
-MTLLIB_STATUS mtllib_sign_get_full_sig(MTLLIB_CTX *ctx, MTL_HANDLE *handle, uint8_t **sig, size_t *sig_len);
+MTLLIB_STATUS mtllib_sign_get_full_sig(MTLLIB_CTX *ctx, MTL_HANDLE *handle, MTLLIB_BUFFER *sig);
 
 /**
- * MTL Library verify a signature (full or condensed)
- * @param ctx        input buffer holding the key
- * @param sig        pointer to the signature bytes
- * @param sig_len    length of the signature in bytes
- * @param ladder     optional pointer to pre-verified ladder (for condensed signatures)
- * @param ladder_len length of the optional pre-verified ladder in bytes
+ * MTL Library verify a signature (full or condensed) with default empty context
+ * @param ctx           pointer to the MTL library key context
+ * @param msg           msg to authenticate
+ * @param sig           pointer to the signature bytes
+ * @param ladder        optional pointer to pre-verified ladder (for condensed signatures)
  * @param condensed_len optional pointer that will be filled in to the condensed length
  * @return MTLLIB_STATUS MTLLIB_OK if successful
  */
-MTLLIB_STATUS mtllib_verify(MTLLIB_CTX *ctx, uint8_t *msg, size_t msg_len, uint8_t *sig, size_t sig_len, uint8_t *ladder_buf, size_t ladder_buf_len, size_t* condensed_len);
+MTLLIB_STATUS mtllib_verify(MTLLIB_CTX *ctx, 
+                            MTLLIB_BUFFER *msg,
+                            MTLLIB_BUFFER *sig,
+                            MTLLIB_BUFFER *ladder_buf,
+                            size_t* condensed_len);
+
+/**
+ * MTL Library verify a signature (full or condensed)
+ * @param ctx           pointer to the MTL library key context
+ * @param msg           msg to authenticate
+ * @param ctx_str       context string with which to authenticate msg
+ * @param sig           pointer to the signature bytes
+ * @param ladder        optional pointer to pre-verified ladder (for condensed signatures)
+ * @param condensed_len optional pointer that will be filled in to the condensed length
+ * @return MTLLIB_STATUS MTLLIB_OK if successful
+ */
+MTLLIB_STATUS mtllib_verify_with_ctx_str(MTLLIB_CTX *ctx, 
+                            MTLLIB_BUFFER *msg,
+                            MTLLIB_BUFFER *ctx_str,
+                            MTLLIB_BUFFER *sig,
+                            MTLLIB_BUFFER *ladder_buf,
+                            size_t* condensed_len);
 
 /**
  * MTL Library verify a signed ladder
- * @param ctx        input buffer holding the key
- * @param buffer     pointer to the signed ladder bytes
- * @param buffer_len length of the signed ladder in bytes
+ * @param ctx        pointer to the MTL library key context
+ * @param buffer     MTLLIB buffer with the signed ladder bytes
  * @return MTLLIB_STATUS MTLLIB_OK if successful
  */
-MTLLIB_STATUS mtllib_verify_signed_ladder(MTLLIB_CTX *ctx, uint8_t *buffer, size_t buffer_len);
+MTLLIB_STATUS mtllib_verify_signed_ladder(MTLLIB_CTX *ctx, MTLLIB_BUFFER *buffer);
 
+/**
+ * MTL Library get the current size needed for a signed ladder
+ * @param ctx     The initalized MTLLIB context 
+ * @return 0 for error or max size of the buffer on success
+ */
+size_t mtllib_sig_get_signed_ladder_size(MTLLIB_CTX *ctx);
+
+/**
+ * MTL Library get the size of the hash based on the signature scheme string
+ * @param keystr     key string represnting the signature algorithm
+ * @return hash size in bytes, or 0 if not a valid key string
+ */
+uint16_t mtllib_sig_buffer_get_hash_size(char* keystr);
+
+/**
+ * MTL Library extract the sid from a signature buffer
+ * @param buffer     pointer to the signed ladder bytes
+ * @param buffer_len length of the signed ladder in bytes
+ * @param hash_size  size of the hash for the specific algorithm
+ * @param sid        pre-allocated SERIESID structure for the SID values
+ * @return MTLLIB_STATUS MTLLIB_OK if successful
+ */
+MTLLIB_STATUS mtllib_sig_buffer_get_sid(MTLLIB_BUFFER *buffer, uint16_t hash_size, SERIESID* sid);
+
+/**
+ * MTL Library extract the leaf index from a signature buffer
+ * @param buffer     pointer to the signed ladder bytes
+ * @param buffer_len length of the signed ladder in bytes
+ * @param hash_size  size of the hash for the specific algorithm
+ * @param leaf_index pre-allocated leaf index for the value
+ * @return MTLLIB_STATUS MTLLIB_OK if successful
+ */
+MTLLIB_STATUS mtllib_sig_buffer_get_leaf_index(MTLLIB_BUFFER *buffer, uint16_t hash_size, MTL_INDEX* leaf_index);
+
+/**
+ * MTL Library get the length of the condensed signature from a signature buffer
+ * @param buffer     pointer to the signed ladder bytes
+ * @param buffer_len length of the signed ladder in bytes
+ * @param hash_size  size of the hash for the specific algorithm
+ * @return length in bytes of the condensed signature
+ */
+size_t mtllib_sig_buffer_condensed_sig_len(MTLLIB_BUFFER *buffer, uint16_t hash_size);
 #endif

@@ -30,38 +30,14 @@
 	ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 	POSSIBILITY OF SUCH DAMAGE.
 */
-#include <stdio.h>
-#include <stdlib.h>
-#include "mtltest.h"
-
-#define TEST_MODULE(func) if(func() != 0) {printf("    ERROR: Module Test Failed, Exiting\n"); exit(1);}
-
 /**
- * Main entry point for the MTL Tests
- */
-int main(void)
-{
-	// Test the MTL internal hash functions
-	TEST_MODULE(mtltest_mtl_hash);
+ *  \file mtl_status.h
+ *  \brief MTL status code enumerated values
+*/
+#ifndef __MTL_STATUS_H__
+#define __MTL_STATUS_H__
 
-	// Test the utiltiy functions
-	TEST_MODULE(mtltest_util);
+// #definitions
+typedef enum { MTL_OK, MTL_NULL_PTR, MTL_RESOURCE_FAIL, MTL_BAD_PARAM, MTL_ERROR, MTL_BOGUS } MTLSTATUS;
 
-	// Test the MTL Core Modules
-	TEST_MODULE(mtltest_mtl_node_set);
-	TEST_MODULE(mtltest_mtl);
-
-	// Test the buffer functions
-	TEST_MODULE(mtltest_buffer);
-
-	// Test the abstract
-	TEST_MODULE(mtltest_mtl_abstract);
-
-	// Test the MTL Library "Wrapper" API
-	TEST_MODULE(mtltest_mtllib_util);
-	TEST_MODULE(mtltest_mtllib);
-	
-
-	printf("MTL Test completed successfully!\n");
-	return (0);
-}
+#endif				// __MTL_STATUS_H__

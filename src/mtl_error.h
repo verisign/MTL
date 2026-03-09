@@ -1,5 +1,5 @@
 /*
-	Copyright (c) 2025, VeriSign, Inc.
+	Copyright (c) 2026, VeriSign, Inc.
 	All rights reserved.
 
 	Redistribution and use in source and binary forms, with or without
@@ -38,6 +38,8 @@
 #define __MTL_ERROR_H__
 
 #include <stdio.h>
+#include "mtllib_config.h"
+#include "mtl_status.h"
 
 // #definitions
 /** Definition declaring logging is on by default (1) - Remove or undeclare to stop error logging. */
@@ -48,19 +50,13 @@
 #define LOG_ERROR(msg)  if(1) {fprintf(stderr,"\x1B[31m    "\
                                "ERROR (%s:%s:%d): %s\x1B[0m\n",\
                                __FILE__,__FUNCTION__,__LINE__,msg);}
-#else
-#define LOG_ERROR(msg)
-#endif
-
-// Return Status Values
-/** MTL status return code */ 
-#ifndef MTL_RETURN_CODES_DEF
-#define MTL_RETURN_CODES_DEF 1
-typedef enum { MTL_OK, MTL_NULL_PTR, MTL_RESOURCE_FAIL, MTL_BAD_PARAM, MTL_ERROR, MTL_BOGUS } MTLSTATUS;
 #define LOG_ERROR_WITH_CODE(ftn,code)  if(1) { \
 	static const char* MTLSTATUS_STR[] = { "MTL_OK", "MTL_NULL_PTR", "MTL_RESOURCE_FAIL", "MTL_BAD_PARAM", "MTL_ERROR", "MTL_BOGUS" };\
 	fprintf(stderr,"\x1B[31mERROR (%s:%s:%d): %s returned %s\x1B[0m\n",\
             __FILE__,__FUNCTION__,__LINE__,ftn,MTLSTATUS_STR[code]);}
+#else
+#define LOG_ERROR(msg)
+#define LOG_ERROR_WITH_CODE(ftn,code)
 #endif
 
 #endif				// __MTL_ERROR_H
