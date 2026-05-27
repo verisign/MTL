@@ -322,7 +322,7 @@ MTLLIB_STATUS mtllib_key_from_buffer(MTLLIB_BUFFER *buffer, MTLLIB_CTX **ctx)
     bytes_to_uint16(buffer_ptr, &hash_size);
     buffer_ptr += 2;
     curr_len -= 2;
-    if ((hash_size > 64) || (hash_size < 1))
+    if ((hash_size > 32) || (hash_size < 1))
     {
         free(mtllib_ctx);
         return MTLLIB_BAD_VALUE;
