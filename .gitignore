@@ -127,3 +127,15 @@ docs/html/**
 docs/latex/**
 
 src/.libs/*
+
+# Ignore test logs
+test/mtltest.trs
+test/mtltest.log
+
+# Ignore demo checkpoints and pycache
+examples/demo/__pycache__
+examples/demo/.ipynb_checkpoints
+examples/demo/.Trash-0
+examples/demo/data/.ipynb_checkpoints
+examples/demo/helper/ipynb_checkpoints
+examples/demo/helper/__pycache__

@@ -49,7 +49,7 @@ uint8_t MTL_FIXED_CSTR[MTL_FIXED_CSTR_LEN] = {1,6,'M','T','L','O','I','D'};
 
 /*****************************************************************
 * cSHA2-X Hash Function - Based on OpenSSL EVP API
-* From draft-harvey-cfrg-mtl-mode-07
+* Uses fixed customization string MTL_FIXED_CSTR for cSHA2-X
 ******************************************************************
  * @param out:     output hash buffer
  * @param in:      Input buffer
@@ -128,8 +128,8 @@ MTLSTATUS mtl_hash_sha2(uint8_t * out, const uint8_t * in, size_t in_len, size_t
 /*****************************************************************
 * cSHAKE Hash Function - Based on OpenSSL EVP API.
 * Automatically uses cSHAKE128 or cSHAKE256 based on hash_len. 
-* Uses fixed customization string from draft-harvey-cfrg-mtl-mode-07. 
-* NOTE: cSHAKE not yet supported by OpenSSL. For now, we use SHAKE as a placeholder. 
+* Uses fixed customization strings for leaf and internal nodes from draft-kaizer-dnsop-ml-dsa-mtl-dnssec-00 section 5.2
+* NOTE: cSHAKE not yet supported by OpenSSL stable versions. For now, we use SHAKE as a placeholder. 
 ******************************************************************
  * @param out:     output hash buffer
  * @param in:      Input buffer
@@ -194,7 +194,7 @@ MTLSTATUS mtl_hash_shake(uint8_t * out, const uint8_t * in, size_t in_len, size_
  * @param msg_len:    Length of the msg_buffer array
  * @param hash_out:       Pointer to byte array where hash is stored
  * @param hash_len:   Length of hash byte array. Also interpreted as security parameter
- * @param ctx:        Context string for this message
+ * @param ctx:        Context string for this message; MUST be null as per draft-kaizer-dnsop-ml-dsa-mtl-dnssec-00
  * @param algorithm:  Type of algorithm used (#defined values) 
  * @return MTL_OK if successful
  */
@@ -227,9 +227,9 @@ MTLSTATUS mtl_node_set_hash_leaf(
 		return MTL_BAD_PARAM;
 	}
 
-	// H_leaf from draft-harvey-cfrg-mtl-mode-07 section 10.1
-	// Buffer is SID || ADRS || Rand || octet(OLEN(ctx)) || ctx || M
-	buffer_len = sid->length + 2*sizeof(node_index) + rand_len + 1 + ctx_len + msg_len;
+	// H_leaf from draft-kaizer-dnsop-ml-dsa-mtl-dnssec-00 section 5.2
+	// Buffer is SID || Rand || leaf index || octet(OLEN(ctx)) || ctx || M
+	buffer_len = sid->length + rand_len + sizeof(node_index) + 1 + ctx_len + msg_len;
 
 	buffer = malloc(buffer_len);
 	if(buffer == NULL) {
@@ -237,11 +237,9 @@ MTLSTATUS mtl_node_set_hash_leaf(
 		return MTL_RESOURCE_FAIL;
 	}
 	BUFFER_APPEND(buffer, buffer_offset, sid->id, sid->length);
+	BUFFER_APPEND(buffer, buffer_offset, rand, rand_len);
 	mtl_index_to_bytes(buffer+buffer_offset, node_index);
 	buffer_offset += sizeof(MTL_INDEX);
-	mtl_index_to_bytes(buffer+buffer_offset, node_index); // for leaves, L=R
-	buffer_offset += sizeof(MTL_INDEX); 
-	BUFFER_APPEND(buffer, buffer_offset, rand, rand_len);
 	BUFFER_APPEND(buffer, buffer_offset, &ctx_len, 1);
 	BUFFER_APPEND(buffer, buffer_offset, ctx, ctx_len);
 	BUFFER_APPEND(buffer, buffer_offset, msg_buffer, msg_len);
@@ -265,7 +263,7 @@ MTLSTATUS mtl_node_set_hash_leaf(
 }
 
 /*****************************************************************
-* Algorithm 1: SHA2 Hashing a message and randomizer to produce a leaf node.
+* SHA2 Hashing a message and randomizer to produce a leaf node.
 ******************************************************************
  * @param sid:        Series identifier for this MTL node set
  * @param node_index:    Node identifier for this message
@@ -275,7 +273,7 @@ MTLSTATUS mtl_node_set_hash_leaf(
  * @param msg_len:    Length of the msg_buffer array
  * @param hash_out:       Pointer to byte array where hash is stored
  * @param hash_len:   Length of hash byte array. Also interpreted as security parameter
- * @param ctx:        Context string for this message
+ * @param ctx:        Context string for this message; MUST be null as per draft-kaizer-dnsop-ml-dsa-mtl-dnssec
  * @param algorithm:  Type of algorithm used (#defined values) 
  * @return MTL_OK if successful
  */
@@ -294,7 +292,7 @@ MTLSTATUS mtl_node_set_hash_leaf_sha2(
 }
 
 /*****************************************************************
-* Algorithm 1: SHAKE Hashing a message and randomizer to produce a leaf node.
+* SHAKE Hashing a message and randomizer to produce a leaf node.
 ******************************************************************
  * @param sid:        Series identifier for this MTL node set
  * @param node_index:    Node identifier for this message
@@ -304,7 +302,7 @@ MTLSTATUS mtl_node_set_hash_leaf_sha2(
  * @param msg_len:    Length of the msg_buffer array
  * @param hash_out:       Pointer to byte array where hash is stored
  * @param hash_len:   Length of hash byte array. Also interpreted as security parameter
- * @param ctx:        Context string for this message
+ * @param ctx:        Context string for this message; MUST be null as per draft-kaizer-dnsop-ml-dsa-mtl-dnssec
  * @param algorithm:  Type of algorithm used (#defined values) 
  * @return MTL_OK if successful
  */
@@ -323,11 +321,11 @@ MTLSTATUS mtl_node_set_hash_leaf_shake(
 }
 
 /*****************************************************************
-* Algorithm 2: Hashing Two Child Nodes to Produce an Internal Node.
+* Hashing Two Child Nodes to Produce an Internal Node.
 ******************************************************************
  * @param sid:        Series ID generated for the MTL node set
- * @param adrs_left:   Left index of this node's address
- * @param adrs_right:  Right index of this node's address
+ * @param index_left:   Left index of this node's address
+ * @param index_right:  Right index of this node's address
  * @param hash_left:   Pointer to byte array for left child hash
  * @param hash_right:  Pointer to byte array for right child hash
  * @param hash_out:       Pointer where the resulting hash is placed
@@ -337,8 +335,8 @@ MTLSTATUS mtl_node_set_hash_leaf_shake(
  */
 MTLSTATUS mtl_node_set_hash_int(
 				  SERIESID * sid,
-				  MTL_INDEX adrs_left,
-				  MTL_INDEX adrs_right,
+				  MTL_INDEX index_left,
+				  MTL_INDEX index_right,
 				  uint8_t * hash_left,
 				  uint8_t * hash_right, uint8_t * hash_out,
 				  uint32_t hash_len, uint8_t algorithm)
@@ -357,18 +355,18 @@ MTLSTATUS mtl_node_set_hash_int(
 		return MTL_BAD_PARAM;
 	}
 
-	// H_int from draft-harvey-cfrg-mtl-mode-07 Section 10.1
-	// H(SID || ADRS || M_L || M_R)
-	buffer_len = sid->length + 2*sizeof(adrs_left) + 2*hash_len;
+	// H_int from draft-kaizer-dnsop-ml-dsa-mtl-dnssec-00 section 5.2
+	// H(SID || index_left || index_right || hash_left || hash_right)
+	buffer_len = sid->length + 2*sizeof(index_left) + 2*hash_len;
 	buffer = malloc(buffer_len);
 	if (buffer == NULL) {
 		LOG_ERROR("Unable to allocate buffer");
 		return MTL_RESOURCE_FAIL;
 	}
 	BUFFER_APPEND(buffer, buffer_offset, sid->id, sid->length);
-	mtl_index_to_bytes(buffer+buffer_offset, adrs_left);
+	mtl_index_to_bytes(buffer+buffer_offset, index_left);
 	buffer_offset += sizeof(MTL_INDEX);
-	mtl_index_to_bytes(buffer+buffer_offset, adrs_right);
+	mtl_index_to_bytes(buffer+buffer_offset, index_right);
 	buffer_offset += sizeof(MTL_INDEX); 
 	BUFFER_APPEND(buffer, buffer_offset, hash_left, hash_len);
 	BUFFER_APPEND(buffer, buffer_offset, hash_right, hash_len);
@@ -392,11 +390,11 @@ MTLSTATUS mtl_node_set_hash_int(
 }
 
 /*****************************************************************
-* Algorithm 2: SHA2 Hashing Child Nodes to Produce an Internal Node.
+* SHA2 Hashing Child Nodes to Produce an Internal Node.
 ******************************************************************
  * @param sid:        Series ID generated for the MTL node set
- * @param adrs_left:   Node Id for the left child node
- * @param adrs_right:  Node Id for the right child node
+ * @param index_left:   Node Id for the left child node
+ * @param index_right:  Node Id for the right child node
  * @param hash_left:   Pointer to byte array for left child hash
  * @param hash_right:  Pointer to byte array for right child hash
  * @param hash:       Pointer where the resulting hash is placed
@@ -405,23 +403,23 @@ MTLSTATUS mtl_node_set_hash_int(
  */
 MTLSTATUS mtl_node_set_hash_int_sha2(
 				       SERIESID * sid,
-				       MTL_INDEX adrs_left,
-				       MTL_INDEX adrs_right,
+				       MTL_INDEX index_left,
+				       MTL_INDEX index_right,
 				       uint8_t * hash_left,
 				       uint8_t * hash_right, uint8_t * hash,
 				       uint32_t hash_len)
 {
-	return mtl_node_set_hash_int(sid, adrs_left, adrs_right,
+	return mtl_node_set_hash_int(sid, index_left, index_right,
 					 hash_left, hash_right, hash, hash_len,
 					 MTL_HASH_SHA2);
 }
 
 /*****************************************************************
-* Algorithm 2: SHAKE Hashing Child Nodes to Produce an Internal Node.
+* SHAKE Hashing Child Nodes to Produce an Internal Node.
 ******************************************************************
  * @param sid:        Series ID generated for the MTL node set
- * @param adrs_left:   Node Id for the left child node
- * @param adrs_right:  Node Id for the right child node
+ * @param index_left:   Node Id for the left child node
+ * @param index_right:  Node Id for the right child node
  * @param hash_left:   Pointer to byte array for left child hash
  * @param hash_right:  Pointer to byte array for right child hash
  * @param hash:       Pointer where the resulting hash is placed
@@ -430,13 +428,13 @@ MTLSTATUS mtl_node_set_hash_int_sha2(
  */
 MTLSTATUS mtl_node_set_hash_int_shake(
 					SERIESID * sid,
-					MTL_INDEX adrs_left,
-					MTL_INDEX adrs_right,
+					MTL_INDEX index_left,
+					MTL_INDEX index_right,
 					uint8_t * hash_left,
 					uint8_t * hash_right, uint8_t * hash,
 					uint32_t hash_len)
 {
-	return mtl_node_set_hash_int(sid, adrs_left, adrs_right,
+	return mtl_node_set_hash_int(sid, index_left, index_right,
 					 hash_left, hash_right, hash, hash_len,
 					 MTL_HASH_SHAKE);
 }

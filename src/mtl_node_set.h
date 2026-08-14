@@ -60,6 +60,9 @@
 */
 #define MTL_TREE_RANDOMIZER_PAGES 8192
 
+#define MTL_PRIVATE_KEY 0
+#define MTL_PUBLIC_KEY 1
+
 
 // Data structures
 /**
@@ -95,6 +98,7 @@ typedef struct MTLNODES {
 	 * Also used as security parameter (target bit security = 8*hash_size)
 	 */	
 	uint16_t hash_size;
+	uint8_t  pub_key;
 	/** Tree page byte buffer allocation pointer */		
 	uint8_t *tree_pages[MTL_TREE_MAX_PAGES];
 	/** Page size in bytes */		
@@ -104,14 +108,15 @@ typedef struct MTLNODES {
 } MTLNODES;
 
 // Prototypes
-/**
- *  MTL node set function to initalize a MTLNS structure
- * @param nodes Pointer to MTL node context to initalize
- * @param sid series id to use for this MTLNS
+/*****************************************************************
+*  MTL node set function to initalize a MTLNS structure
+******************************************************************
+ * @param nodes: Pointer to MTL node context to initalize
+ * @param sid: series id to use for this MTLNS
+ * @param pub_key: flag indicating if this is a public key or private key
  * @return none
  */
-
-void mtl_node_set_init(MTLNODES * nodes, SERIESID * sid);
+void mtl_node_set_init(MTLNODES * nodes, SERIESID * sid, uint8_t pub_key);
 
 /**
  *  MTL node set function to free a MTLNS structure

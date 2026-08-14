@@ -103,10 +103,11 @@ uint8_t mtltest_mtl_node_set_init(void)
 	sid.length = 32;
 	memcpy(sid.id, sid_val, sid.length);
 
-	mtl_node_set_init(&nodes, &sid);
+	mtl_node_set_init(&nodes, &sid, MTL_PRIVATE_KEY);
 
 	assert(nodes.leaf_count == 0);
 	assert(nodes.hash_size == hash_len);
+	assert(nodes.pub_key == MTL_PRIVATE_KEY);
 	assert(nodes.tree_page_size == MTL_TREE_PAGE_SIZE);
 
 	for (index = 0; index < MTL_TREE_MAX_PAGES; index++) {
@@ -115,6 +116,7 @@ uint8_t mtltest_mtl_node_set_init(void)
 
 	// Cleanup and verify clean up works
 	mtl_node_set_free(&nodes);
+	assert(nodes.pub_key == 0);
 	assert(nodes.leaf_count == 0);
 	assert(nodes.hash_size == 0);
 	assert(nodes.tree_page_size == 0);
@@ -122,6 +124,22 @@ uint8_t mtltest_mtl_node_set_init(void)
 	for (index = 0; index < MTL_TREE_MAX_PAGES; index++) {
 		assert(nodes.tree_pages[index] == NULL);
 	}
+
+	mtl_node_set_free(&nodes);
+
+	mtl_node_set_init(&nodes, &sid, MTL_PUBLIC_KEY);
+
+	assert(nodes.leaf_count == 0);
+	assert(nodes.hash_size == hash_len);
+	assert(nodes.pub_key == MTL_PUBLIC_KEY);	
+	assert(nodes.tree_page_size == MTL_TREE_PAGE_SIZE);
+
+	// Cleanup and verify clean up works
+	mtl_node_set_free(&nodes);
+	assert(nodes.pub_key == 0);
+	assert(nodes.leaf_count == 0);
+	assert(nodes.hash_size == 0);
+	assert(nodes.tree_page_size == 0);
 
 	mtl_node_set_free(&nodes);
 
@@ -145,7 +163,7 @@ uint8_t mtltest_mtl_node_set_init_null(void)
 	sid.length = 32;
 	memcpy(sid.id, sid_val, sid.length);
 
-	mtl_node_set_init(NULL, &sid);
+	mtl_node_set_init(NULL, &sid, MTL_PRIVATE_KEY);
 	// Verifying that this doesn't crash or cause strange behaviors
 
 	return 0;
@@ -183,7 +201,7 @@ uint8_t mtltest_mtl_node_set_insert(void)
 	sid.length = 32;
 	memcpy(sid.id, sid_val, sid.length);
 
-	mtl_node_set_init(&nodes, &sid);
+	mtl_node_set_init(&nodes, &sid, MTL_PRIVATE_KEY);
 
 	assert(nodes.leaf_count == 0);
 	assert(nodes.hash_size == hash_len);
@@ -246,6 +264,19 @@ uint8_t mtltest_mtl_node_set_insert(void)
 
 	mtl_node_set_free(&nodes);
 
+	mtl_node_set_init(&nodes, &sid, MTL_PUBLIC_KEY);
+
+	assert(nodes.leaf_count == 0);
+	assert(nodes.hash_size == hash_len);
+	assert(nodes.tree_pages[0] == NULL);
+	nodes.tree_page_size = test_page_size * hash_len;
+
+	// Insert the first node
+	memset(buffer, 0xff, hash_len);
+	assert(mtl_node_set_insert(&nodes, 0, 0, buffer) == MTL_BAD_PARAM);
+
+	mtl_node_set_free(&nodes);
+
 	return 0;
 }
 
@@ -270,7 +301,7 @@ uint8_t mtltest_mtl_node_set_fetch(void)
 	sid.length = 32;
 	memcpy(sid.id, sid_val, sid.length);
 
-	mtl_node_set_init(&nodes, &sid);
+	mtl_node_set_init(&nodes, &sid, MTL_PRIVATE_KEY);
 
 	assert(nodes.leaf_count == 0);
 	assert(nodes.hash_size == hash_len);
@@ -314,6 +345,18 @@ uint8_t mtltest_mtl_node_set_fetch(void)
 
 	mtl_node_set_free(&nodes);
 
+	mtl_node_set_init(&nodes, &sid, MTL_PUBLIC_KEY);
+
+	assert(nodes.leaf_count == 0);
+	assert(nodes.hash_size == hash_len);
+	assert(nodes.tree_pages[0] == NULL);
+	nodes.tree_page_size = 8 * hash_len;
+
+	// Fetch a node that doesn't exist in the set
+	assert(mtl_node_set_fetch(&nodes, 120, 120, &hash) == MTL_BAD_PARAM);
+
+	mtl_node_set_free(&nodes);
+
 	return 0;
 }
 
@@ -339,7 +382,7 @@ uint8_t mtltest_mtl_node_set_get_randomizer(void)
 	sid.length = 32;
 	memcpy(sid.id, sid_val, sid.length);
 
-	mtl_node_set_init(&nodes, &sid);
+	mtl_node_set_init(&nodes, &sid, MTL_PRIVATE_KEY);
 
 	assert(nodes.leaf_count == 0);
 	assert(nodes.hash_size == hash_len);
@@ -373,6 +416,18 @@ uint8_t mtltest_mtl_node_set_get_randomizer(void)
 
 	mtl_node_set_free(&nodes);
 
+	mtl_node_set_init(&nodes, &sid, MTL_PUBLIC_KEY);
+
+	assert(nodes.leaf_count == 0);
+	assert(nodes.hash_size == hash_len);
+	assert(nodes.tree_pages[0] == NULL);
+	nodes.tree_page_size = 8 * hash_len;
+
+	assert(mtl_node_set_insert_randomizer(&nodes, 10, random) == MTL_BAD_PARAM);
+	assert(mtl_node_set_get_randomizer(&nodes, 10, &buffer_ptr) == MTL_BAD_PARAM);
+
+	mtl_node_set_free(&nodes);
+
 	return 0;
 }
 
@@ -397,7 +452,7 @@ uint8_t mtltest_mtl_node_set_get_randomizer_null(void)
 	sid.length = 32;
 	memcpy(sid.id, sid_val, sid.length);
 
-	mtl_node_set_init(&nodes, &sid);
+	mtl_node_set_init(&nodes, &sid, MTL_PRIVATE_KEY);
 
 	assert(nodes.leaf_count == 0);
 	assert(nodes.hash_size == hash_len);
@@ -639,7 +694,7 @@ uint8_t mtltest_mtl_node_set_maximum(void)
 	sid.length = 32;
 	memcpy(sid.id, sid_val, sid.length);
 
-	mtl_node_set_init(&nodes, &sid);
+	mtl_node_set_init(&nodes, &sid, MTL_PRIVATE_KEY);
 
 	// Build complete tree
 	for (width_index = 1; width_index && width_index <= MTL_NODE_SET_MAX_LEAF+1; width_index *= 2)

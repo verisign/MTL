@@ -43,5 +43,17 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile_mtl_mode
+  jupyter:
+    image: mtl-jupyter:latest
+    build:
+      context: .
+      dockerfile: docker/Dockerfile_DEMO
+    volumes:
+      - ./examples/demo:/app/jupyter
+    environment:
+    - JUPYTER-ENABLE_LAB=yes
+    - JUPYTER-TOKEN=demo
+    ports:
+    - "8888:8888"
 
   

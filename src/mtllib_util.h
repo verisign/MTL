@@ -66,6 +66,7 @@ MTLLIB_STATUS mtllib_key_write_algorithms(FILE *fp);
  * @param pk          Byte array containin the public key
  * @param pk_len      Length of the public key byte array
  * @param sid         Series ID value for MTL series (NULL for new keys)
+ * @param pub_key     flag indicating if this is a public key or private key
  * @return MTLLIB_STATUS MTLLIB_OK on success
  */
 MTLLIB_STATUS mtllib_util_setup_sig_scheme(MTL_CRYPTO_LIBRARY lib,
@@ -74,7 +75,8 @@ MTLLIB_STATUS mtllib_util_setup_sig_scheme(MTL_CRYPTO_LIBRARY lib,
                                            size_t sk_len,
                                            uint8_t *pk,
                                            size_t pk_len,
-                                           SERIESID *sid);
+                                           SERIESID *sid,
+                                           uint8_t pub_key);
 
 /**
  * MTL Library Read Bytes with Length from Buffer

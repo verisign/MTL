@@ -1,5 +1,5 @@
 # MTL Mode Docker Images
-The MTL docker image is dependent on a base cryptographic image which consists of OpenSSL (version 3.5.0+) and LibOQS (version 0.14.0+).
+The MTL docker image is dependent on a base cryptographic image which consists of OpenSSL (version 3.5.0+) and LibOQS (version 0.16.0+).
 
 That base image can be built using the pqc_base Dockerfile in this repo via the command ``` docker compose build pqc-base ```
 

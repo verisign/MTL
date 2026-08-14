@@ -41,9 +41,10 @@
 ******************************************************************
  * @param nodes: Pointer to MTL node context to initalize
  * @param sid: series id to use for this MTLNS
+ * @param pub_key: flag indicating if this is a public key or private key
  * @return none
  */
-void mtl_node_set_init(MTLNODES * nodes, SERIESID * sid)
+void mtl_node_set_init(MTLNODES * nodes, SERIESID * sid, uint8_t pub_key)
 {
 	uint16_t index;
 	// Reserved for future needs
@@ -57,13 +58,16 @@ void mtl_node_set_init(MTLNODES * nodes, SERIESID * sid)
 	nodes->leaf_count = 0;
 	nodes->hash_size = sid->length/2;
 	nodes->tree_page_size = MTL_TREE_PAGE_SIZE;
-	// Initalize the tree pages
-	for (index = 0; index < MTL_TREE_MAX_PAGES; index++) {
-		nodes->tree_pages[index] = NULL;
-	}
-	// Initalize the randomizer pages
-	for (index = 0; index < MTL_TREE_RANDOMIZER_PAGES; index++) {
-		nodes->randomizer_pages[index] = NULL;
+	nodes->pub_key = pub_key;
+	if(nodes->pub_key == MTL_PRIVATE_KEY) {
+		// Initalize the tree pages
+		for (index = 0; index < MTL_TREE_MAX_PAGES; index++) {
+			nodes->tree_pages[index] = NULL;
+		}
+		// Initalize the randomizer pages
+		for (index = 0; index < MTL_TREE_RANDOMIZER_PAGES; index++) {
+			nodes->randomizer_pages[index] = NULL;
+		}		
 	}
 }
 
@@ -80,22 +84,24 @@ void mtl_node_set_free(MTLNODES * nodes)
 	if (nodes == NULL) {
 		return;
 	}
-	// Free the tree pages
-	for (index = 0; index < MTL_TREE_MAX_PAGES; index++) {
-		if (nodes->tree_pages[index] != NULL) {
-			free(nodes->tree_pages[index]);
-			nodes->tree_pages[index] = NULL;
+	if(nodes->pub_key == MTL_PRIVATE_KEY) {
+		// Free the tree pages
+		for (index = 0; index < MTL_TREE_MAX_PAGES; index++) {
+			if (nodes->tree_pages[index] != NULL) {
+				free(nodes->tree_pages[index]);
+				nodes->tree_pages[index] = NULL;
+			}
+		}
+
+		// Free the randomizer pages
+		for (index = 0; index < MTL_TREE_RANDOMIZER_PAGES; index++) {
+			if (nodes->randomizer_pages[index] != NULL) {
+				free(nodes->randomizer_pages[index]);
+				nodes->randomizer_pages[index] = NULL;
+			}
 		}
 	}
-
-	// Free the randomizer pages
-	for (index = 0; index < MTL_TREE_RANDOMIZER_PAGES; index++) {
-		if (nodes->randomizer_pages[index] != NULL) {
-			free(nodes->randomizer_pages[index]);
-			nodes->randomizer_pages[index] = NULL;
-		}
-	}
-
+	nodes->pub_key = 0;
 	nodes->leaf_count = 0;
 	nodes->hash_size = 0;
 	nodes->tree_page_size = 0;
@@ -119,6 +125,11 @@ MTLSTATUS mtl_node_set_insert(MTLNODES * nodes, MTL_INDEX left, MTL_INDEX right,
 
 	if ((nodes == NULL) || (hash == NULL)) {
 		LOG_ERROR("Null parameters provided");
+		return MTL_BAD_PARAM;
+	}
+
+	if(nodes->pub_key != MTL_PRIVATE_KEY) {
+		LOG_ERROR("Attempted to insert invalid node");
 		return MTL_BAD_PARAM;
 	}
 
@@ -172,6 +183,12 @@ MTLSTATUS mtl_node_set_insert_randomizer(MTLNODES * nodes,
 		LOG_ERROR("Null parameters provided");
 		return MTL_BAD_PARAM;
 	}
+
+	if(nodes->pub_key != MTL_PRIVATE_KEY) {
+		LOG_ERROR("Attempted to insert invalid node");
+		return MTL_BAD_PARAM;
+	}
+
 	if (mtl_node_set_int_node_id(leaf_index, leaf_index, &index) != MTL_OK)
 	{
 		LOG_ERROR("Attempted to insert invalid node randomizer");
@@ -215,6 +232,11 @@ MTLSTATUS mtl_node_set_fetch(MTLNODES * nodes, MTL_INDEX left, MTL_INDEX right,
 {
 	if ((nodes == NULL) || (hash == NULL)) {
 		LOG_ERROR("Null parameters provided");
+		return MTL_BAD_PARAM;
+	}
+
+	if(nodes->pub_key != MTL_PRIVATE_KEY) {
+		LOG_ERROR("Attempted to fetch invalid node");
 		return MTL_BAD_PARAM;
 	}
 
@@ -268,6 +290,12 @@ MTLSTATUS mtl_node_set_get_randomizer(MTLNODES * nodes, MTL_INDEX leaf,
 		LOG_ERROR("Null parameters provided");
 		return MTL_BAD_PARAM;
 	}
+
+	if(nodes->pub_key != MTL_PRIVATE_KEY) {
+		LOG_ERROR("Attempted to get invalid node randomizer");
+		return MTL_BAD_PARAM;
+	}
+
 	if (mtl_node_set_int_node_id(leaf, leaf, &index) != MTL_OK)
 	{
 		LOG_ERROR("Attempted to get invalid node randomizer");
