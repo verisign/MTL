@@ -252,9 +252,10 @@ uint8_t mtlltest_mtllib_util_setup_sig_scheme(void)
 	assert(test_ctx->mtl == NULL);
 
 	// Test making a new key from scratch without a context string
-	assert(mtllib_util_setup_sig_scheme(LIBOQS, test_ctx, NULL, 0, NULL, 0, NULL) == MTLLIB_OK);
+	assert(mtllib_util_setup_sig_scheme(LIBOQS, test_ctx, NULL, 0, NULL, 0, NULL, MTL_PRIVATE_KEY) == MTLLIB_OK);
 	assert(test_ctx->signature != NULL);
 	assert(test_ctx->secret_key != NULL);
+	assert(test_ctx->mtl->nodes.pub_key == MTL_PRIVATE_KEY);
 	zero_count = 0;
 	for (index = 0; index < test_ctx->secret_key_len; index++)
 	{
@@ -277,6 +278,15 @@ uint8_t mtlltest_mtllib_util_setup_sig_scheme(void)
 	}
 	assert(zero_count > 16);
 	assert(test_ctx->mtl != NULL);
+
+	// Setup variables
+	test_ctx = calloc(1, sizeof(MTLLIB_CTX));
+	test_ctx->algo_params = mtllib_util_get_algorithm_props(MTL_TEST_VECTOR_SCHEME_NAME);
+
+	assert(mtllib_util_setup_sig_scheme(LIBOQS, test_ctx, NULL, 0, NULL, 0, NULL, MTL_PUBLIC_KEY) == MTLLIB_OK);
+	assert(test_ctx->signature != NULL);
+	assert(test_ctx->secret_key != NULL);
+	assert(test_ctx->mtl->nodes.pub_key == MTL_PUBLIC_KEY);
 	mtllib_key_free(test_ctx);
 
 	return 0;
@@ -295,8 +305,8 @@ uint8_t mtlltest_mtllib_util_setup_sig_scheme_bad_library(void)
 	test_ctx->algo_params = mtllib_util_get_algorithm_props(MTL_TEST_VECTOR_SCHEME_NAME);
 
 	// Test making a new key from scratch without a context string with unsupported provider
-	assert(mtllib_util_setup_sig_scheme(OPENSSL, test_ctx, NULL, 0, NULL, 0, NULL) == MTLLIB_UNSUPPORTED_FEATURE);
-	assert(mtllib_util_setup_sig_scheme(NONE, test_ctx, NULL, 0, NULL, 0, NULL) == MTLLIB_BAD_ALGORITHM);
+	assert(mtllib_util_setup_sig_scheme(OPENSSL, test_ctx, NULL, 0, NULL, 0, NULL, MTL_PRIVATE_KEY) == MTLLIB_UNSUPPORTED_FEATURE);
+	assert(mtllib_util_setup_sig_scheme(NONE, test_ctx, NULL, 0, NULL, 0, NULL, MTL_PRIVATE_KEY) == MTLLIB_BAD_ALGORITHM);
 
 	mtllib_key_free(test_ctx);
 	return 0;
@@ -315,7 +325,7 @@ uint8_t mtlltest_mtllib_util_setup_sig_scheme_null_context(void)
 	test_ctx->algo_params = mtllib_util_get_algorithm_props(MTL_TEST_VECTOR_SCHEME_NAME);
 
 	// Test making a new key from scratch without a context string with unsupported provider
-	assert(mtllib_util_setup_sig_scheme(LIBOQS, NULL, NULL, 0, NULL, 0, NULL) == MTLLIB_NULL_PARAMS);
+	assert(mtllib_util_setup_sig_scheme(LIBOQS, NULL, NULL, 0, NULL, 0, NULL, MTL_PRIVATE_KEY) == MTLLIB_NULL_PARAMS);
 
 	mtllib_key_free(test_ctx);
 	return 0;
@@ -352,7 +362,7 @@ uint8_t mtlltest_mtllib_util_setup_sig_scheme_with_keys_provided(void)
 	assert(test_ctx->mtl == NULL);
 
 	// Test making a new key from scratch
-	assert(mtllib_util_setup_sig_scheme(LIBOQS, test_ctx, &secret_key[0], sk_len, &public_key[0], pk_len, &sid) == MTLLIB_OK);
+	assert(mtllib_util_setup_sig_scheme(LIBOQS, test_ctx, &secret_key[0], sk_len, &public_key[0], pk_len, &sid, MTL_PRIVATE_KEY) == MTLLIB_OK);
 	assert(test_ctx->signature != NULL);
 	assert(test_ctx->secret_key != NULL);
 	for (index = 0; index < test_ctx->secret_key_len; index++)
@@ -400,7 +410,7 @@ uint8_t mtlltest_mtllib_util_setup_sig_scheme_with_keys_provided_mismatch(void)
 	assert(test_ctx->mtl == NULL);
 
 	// Test making a new key from scratch without a context string
-	assert(mtllib_util_setup_sig_scheme(LIBOQS, test_ctx, &secret_key[0], 32, &public_key[0], 16, &sid) == MTLLIB_MEMORY_ERROR);
+	assert(mtllib_util_setup_sig_scheme(LIBOQS, test_ctx, &secret_key[0], 32, &public_key[0], 16, &sid, MTL_PRIVATE_KEY) == MTLLIB_MEMORY_ERROR);
 	mtllib_key_free(test_ctx);
 
 	return 0;

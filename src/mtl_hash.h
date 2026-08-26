@@ -59,8 +59,8 @@ typedef MTLSTATUS H_LEAF(SERIESID * sid,
 				      	uint8_t * hash_out, uint32_t hash_len);
 
 typedef MTLSTATUS H_INT(SERIESID * sid,
-				  		MTL_INDEX adrs_left,
-				  		MTL_INDEX adrs_right,
+				  		MTL_INDEX index_left,
+				  		MTL_INDEX index_right,
 				  		uint8_t * hash_left,
 				  		uint8_t * hash_right, uint8_t * hash_out,
 				  		uint32_t hash_len);
@@ -74,7 +74,7 @@ typedef MTLSTATUS H_MSG(void *params, SERIESID * sid, MTL_INDEX node_id,
 
 /*****************************************************************
 * cSHA2-X Hash Function - Based on OpenSSL EVP API
-* From draft-harvey-cfrg-mtl-mode-07
+* From draft-kaizer-dnsop-ml-dsa-mtl-dnssec-00
 ******************************************************************
  * @param out:     output hash buffer
  * @param in:      Input buffer
@@ -88,8 +88,8 @@ MTLSTATUS mtl_hash_sha2(uint8_t * out, const uint8_t * in, size_t in_len, size_t
 /*****************************************************************
 * cSHAKE Hash Function - Based on OpenSSL EVP API.
 * Automatically uses cSHAKE128 or cSHAKE256 based on hash_len. 
-* Uses fixed customization string from draft-harvey-cfrg-mtl-mode-07. 
-* NOTE: cSHAKE not yet supported by OpenSSL. For now, we use SHAKE as a placeholder. 
+* Uses fixed customization strings for leaf and internal nodes from draft-kaizer-dnsop-ml-dsa-mtl-dnssec-00. 
+* NOTE: cSHAKE not yet supported by OpenSSL stable versions. For now, we use SHAKE as a placeholder. 
 ******************************************************************
  * @param out:     output hash buffer
  * @param in:      Input buffer
@@ -111,7 +111,7 @@ MTLSTATUS mtl_hash_shake(uint8_t * out, const uint8_t * in, size_t in_len, size_
  * @param msg_len:    Length of the msg_buffer array
  * @param hash_out:       Pointer to byte array where hash is stored
  * @param hash_len:   Length of hash byte array. Also interpreted as security parameter
- * @param ctx:        Context string for this message
+ * @param ctx:        Context string for this message; MUST be null as per draft-kaizer-dnsop-ml-dsa-mtl-dnssec-00
  * @param algorithm:  Type of algorithm used (#defined values) 
  * @return MTL_OK if successful
  */
@@ -128,11 +128,11 @@ H_LEAF mtl_node_set_hash_leaf_sha2;
 H_LEAF mtl_node_set_hash_leaf_shake;
 
 /*****************************************************************
-* Algorithm 2: Hashing Two Child Nodes to Produce an Internal Node.
+* Hashing Two Child Nodes to Produce an Internal Node.
 ******************************************************************
  * @param sid:        Series ID generated for the MTL node set
- * @param adrs_left:   Left index of this node's address
- * @param adrs_right:  Right index of this node's address
+ * @param index_left:   Left index of this node's address
+ * @param index_right:  Right index of this node's address
  * @param hash_left:   Pointer to byte array for left child hash
  * @param hash_right:  Pointer to byte array for right child hash
  * @param hash_out:       Pointer where the resulting hash is placed
@@ -142,8 +142,8 @@ H_LEAF mtl_node_set_hash_leaf_shake;
  */
 MTLSTATUS mtl_node_set_hash_int(
 				  SERIESID * sid,
-				  MTL_INDEX adrs_left,
-				  MTL_INDEX adrs_right,
+				  MTL_INDEX index_left,
+				  MTL_INDEX index_right,
 				  uint8_t * hash_left,
 				  uint8_t * hash_right, uint8_t * hash_out,
 				  uint32_t hash_len, uint8_t algorithm);

@@ -124,7 +124,7 @@ uint8_t mtltest_auth_path_to_buffer(void)
 	MTL_INDEX target_right = 0x1f;
 	uint16_t sibling_count = 5;
 	uint16_t buffer_len = MTL_TEST_VECTOR_CONDENSED_SIG_LEN;
-	uint8_t test_buffer[] = MTL_TEST_VECTOR_UNSIGNED_LADDER;
+	uint8_t test_buffer[] = MTL_TEST_VECTOR_CONDENSED_SIG;
 	uint8_t * buffer = NULL;
 
 	auth.flags = flags;
@@ -141,7 +141,7 @@ uint8_t mtltest_auth_path_to_buffer(void)
 	mtl_rand.length = hash_len;
 	assert(mtl_auth_path_to_buffer(&mtl_rand, &auth, hash_len, &buffer) ==
 	       buffer_len);
-	assert(memcmp(buffer, buffer, buffer_len) == 0);
+	assert(memcmp(buffer, &test_buffer[0], buffer_len) == 0);
 	free(buffer);
 
 	// NULL parameters

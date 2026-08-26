@@ -70,6 +70,12 @@ uint8_t mtltest_mtllib_verify_signed_ladder_no_sig(void);
 uint8_t mtltest_mtllib_verify_signed_ladder_corrupt(void);
 uint8_t mtltest_mtllib_verify_signed_ladder_null(void);
 
+uint16_t mtltest_mtllib_sig_get_signed_ladder_size(void);
+uint16_t mtltest_mtllib_sig_buffer_get_hash_size(void);
+uint16_t mtltest_mtllib_sig_buffer_get_sid(void);
+uint16_t mtltest_mtllib_sig_buffer_get_leaf_index(void);
+uint16_t mtltest_mtllib_sig_buffer_condensed_sig_len(void);
+
 
 uint8_t mtltest_mtllib(void)
 {
@@ -131,6 +137,16 @@ uint8_t mtltest_mtllib(void)
 			 "Verify MTL library verify a signed ladder that is corrupt");			 			 
 	RUN_TEST(mtltest_mtllib_verify_signed_ladder_null,
 			 "Verify MTL library verify a signed ladder with NULL parameters");			 
+	RUN_TEST(mtltest_mtllib_sig_get_signed_ladder_size,
+			 "Verify MTL library get signed ladder size function");	
+	RUN_TEST(mtltest_mtllib_sig_buffer_get_hash_size,
+			 "Verify MTL hash size lookup function");
+	RUN_TEST(mtltest_mtllib_sig_buffer_get_sid,
+			 "Verify MTL signature buffer SID lookup function");		
+	RUN_TEST(mtltest_mtllib_sig_buffer_get_leaf_index,
+			 "Verify MTL signature buffer get leaf index function");		
+	RUN_TEST(mtltest_mtllib_sig_buffer_condensed_sig_len,
+			 "Verify MTL signature buffer get condensed signature length function");				 
 
 	return 0;
 }
@@ -226,18 +242,18 @@ uint8_t mtltest_mtllib_pubkey_from_buffer(void)
 	MTLLIB_CTX *ctx = NULL;
 	uint8_t *pubkey = NULL;
 	size_t pubkey_len[] = {
-        OQS_SIG_sphincs_shake_128s_simple_length_public_key,
-        OQS_SIG_sphincs_shake_128f_simple_length_public_key,
-        OQS_SIG_sphincs_shake_192s_simple_length_public_key,
-        OQS_SIG_sphincs_shake_192f_simple_length_public_key,
-        OQS_SIG_sphincs_shake_256s_simple_length_public_key,
-        OQS_SIG_sphincs_shake_256f_simple_length_public_key,
-        OQS_SIG_sphincs_sha2_128s_simple_length_public_key,
-        OQS_SIG_sphincs_sha2_128f_simple_length_public_key,
-        OQS_SIG_sphincs_sha2_192s_simple_length_public_key,
-        OQS_SIG_sphincs_sha2_192f_simple_length_public_key,
-        OQS_SIG_sphincs_sha2_256s_simple_length_public_key,
-        OQS_SIG_sphincs_sha2_256f_simple_length_public_key,
+        OQS_SIG_slh_dsa_pure_shake_128s_length_public_key,
+        OQS_SIG_slh_dsa_pure_shake_128f_length_public_key,
+        OQS_SIG_slh_dsa_pure_shake_192s_length_public_key,
+        OQS_SIG_slh_dsa_pure_shake_192f_length_public_key,
+        OQS_SIG_slh_dsa_pure_shake_256s_length_public_key,
+        OQS_SIG_slh_dsa_pure_shake_256f_length_public_key,
+        OQS_SIG_slh_dsa_pure_sha2_128s_length_public_key,
+        OQS_SIG_slh_dsa_pure_sha2_128f_length_public_key,
+        OQS_SIG_slh_dsa_pure_sha2_192s_length_public_key,
+        OQS_SIG_slh_dsa_pure_sha2_192f_length_public_key,
+        OQS_SIG_slh_dsa_pure_sha2_256s_length_public_key,
+        OQS_SIG_slh_dsa_pure_sha2_256f_length_public_key,
         OQS_SIG_ml_dsa_44_length_public_key,
         OQS_SIG_ml_dsa_65_length_public_key,
         OQS_SIG_ml_dsa_87_length_public_key,
@@ -1249,3 +1265,138 @@ uint8_t mtltest_mtllib_verify_signed_ladder_null(void) {
 	return 0;
 }
 
+
+
+uint16_t mtltest_mtllib_sig_get_signed_ladder_size(void) {
+	MTLLIB_CTX *ctx = NULL;
+	MTL_HANDLE *handle = NULL;
+	uint8_t sid[] = MTL_TEST_VECTOR_SID;
+	size_t key_buffer_len = MTL_TEST_VECTOR_KEYBUFFER_LEN;
+	uint8_t key_buffer_bytes[] = MTL_TEST_VECTOR_KEYBUFFER;
+	uint8_t msg[] = MTL_TEST_VECTOR_MSG;
+	size_t msg_len = MTL_TEST_VECTOR_MSG_LEN;
+	size_t secparam = MTL_TEST_VECTOR_SCHEME_SECPARAM;
+	size_t index = 0;
+	MTLLIB_BUFFER *key_buffer = NULL;
+	MTLLIB_BUFFER *sig = NULL;
+	MTLLIB_BUFFER *msg_buffer = NULL;
+	size_t expected_siglen = MTL_TEST_VECTOR_FULL_SIG_LEN;
+	
+	assert(mtllib_buffer_initialize(&key_buffer, key_buffer_len, key_buffer_bytes) == MTLLIB_OK);
+	assert(mtllib_key_from_buffer(key_buffer, &ctx) == MTLLIB_OK);
+	assert(mtllib_buffer_initialize(&msg_buffer, msg_len, msg) == MTLLIB_OK);
+	assert(mtllib_buffer_initialize(&sig, expected_siglen, NULL) == MTLLIB_OK);
+
+	for (index = 0; index < 15; index++)
+	{
+		if (handle != NULL)
+		{
+			mtllib_sign_free_handle(&handle);
+			assert(handle == NULL);
+		}
+		assert(mtllib_sign_append(ctx, msg_buffer, &handle) == MTLLIB_OK);
+		assert(&handle != NULL);
+		assert(handle->leaf_index == index);
+		assert(handle->sid_len == 2*secparam);
+		assert(memcmp(handle->sid, &sid[0], 2*secparam) == 0);
+	}
+
+	// Draft - draft-kaizer-dnsop-ml-dsa-mtl-dnssec 5.1.2.1.
+	size_t expected_size = 2 + 32 + 2 + (4 * 32) + 4 + 2420;
+	assert(mtllib_sig_get_signed_ladder_size(ctx) == expected_size);
+
+	mtllib_buffer_free(msg_buffer);
+	mtllib_buffer_free(sig);
+	mtllib_buffer_free(key_buffer);
+	mtllib_sign_free_handle(&handle);
+	mtllib_key_free(ctx);
+	
+	assert(mtllib_sig_get_signed_ladder_size(NULL) == 0);
+	ctx->mtl = NULL;
+	assert(mtllib_sig_get_signed_ladder_size(NULL) == 0);	
+
+	return 0;
+}
+
+uint16_t mtltest_mtllib_sig_buffer_get_hash_size(void) {
+	assert(mtllib_sig_buffer_get_hash_size("ML-DSA-44-MTL-SHAKE-128") == 16);
+	assert(mtllib_sig_buffer_get_hash_size("ML-DSA-65-MTL-SHAKE-192") == 24);
+	assert(mtllib_sig_buffer_get_hash_size("ML-DSA-87-MTL-SHAKE-256") == 32);
+	assert(mtllib_sig_buffer_get_hash_size("Invalid") == 0);
+
+	return 0;
+}
+
+
+uint16_t mtltest_mtllib_sig_buffer_get_sid(void) {
+	MTLLIB_BUFFER *sig = NULL;
+	size_t full_signature_len = MTL_TEST_VECTOR_FULL_SIG_LEN;
+	uint8_t full_signature[] = MTL_TEST_VECTOR_FULL_SIG;
+	uint16_t hash_size = 16;
+	SERIESID sid;
+	uint16_t sid_length = 32;
+
+	assert(mtllib_buffer_initialize(&sig, full_signature_len, &full_signature[0]) == MTLLIB_OK);
+	assert(mtllib_sig_buffer_get_sid(sig, hash_size, &sid) == MTLLIB_OK);
+	assert(sid.length == sid_length);
+	assert(memcmp(sid.id, &full_signature[2], sid_length) == 0);
+	assert(mtllib_sig_buffer_get_sid(sig, hash_size, NULL) == MTLLIB_NULL_PARAMS);
+
+	mtllib_buffer_free(sig);
+
+
+	assert(mtllib_buffer_initialize(&sig, 33, NULL) == MTLLIB_OK);
+	assert(mtllib_sig_buffer_get_sid(sig, hash_size, &sid) == MTLLIB_BUFFER_ISSUE);
+	assert(mtllib_sig_buffer_get_sid(NULL, hash_size, &sid) == MTLLIB_BUFFER_ISSUE);
+
+	mtllib_buffer_free(sig);
+
+	return 0;
+}
+
+uint16_t mtltest_mtllib_sig_buffer_get_leaf_index(void) {
+	MTLLIB_BUFFER *sig = NULL;
+	size_t full_signature_len = MTL_TEST_VECTOR_FULL_SIG_LEN;
+	uint8_t full_signature[] = MTL_TEST_VECTOR_FULL_SIG;
+	uint16_t hash_size = 16;
+	MTL_INDEX leaf_index;
+
+	assert(mtllib_buffer_initialize(&sig, full_signature_len, &full_signature[0]) == MTLLIB_OK);
+	assert(mtllib_sig_buffer_get_leaf_index(sig, hash_size, &leaf_index) == MTLLIB_OK);
+	assert(leaf_index == 13);
+
+	assert(mtllib_sig_buffer_get_leaf_index(NULL, hash_size, &leaf_index) == MTLLIB_BUFFER_ISSUE);
+	assert(mtllib_sig_buffer_get_leaf_index(sig, hash_size, NULL) == MTLLIB_NULL_PARAMS);
+
+	mtllib_buffer_free(sig);
+
+	assert(mtllib_buffer_initialize(&sig, 57, NULL) == MTLLIB_OK);
+	assert(mtllib_sig_buffer_get_leaf_index(sig, hash_size, &leaf_index) == MTLLIB_BUFFER_ISSUE);	
+
+	mtllib_buffer_free(sig);	
+
+	return 0;
+}										
+
+uint16_t mtltest_mtllib_sig_buffer_condensed_sig_len(void) {
+	MTLLIB_BUFFER *sig = NULL;
+	size_t full_signature_len = MTL_TEST_VECTOR_FULL_SIG_LEN;
+	uint8_t full_signature[] = MTL_TEST_VECTOR_FULL_SIG;
+	uint16_t hash_size = 16;
+
+	assert(mtllib_buffer_initialize(&sig, full_signature_len, &full_signature[0]) == MTLLIB_OK);
+	
+	// Draft - draft-kaizer-dnsop-ml-dsa-mtl-dnssec 5.1.2.1.	
+	size_t expected_size = 2 + 32 + hash_size + 8 + 8 + 8 + 2 + (5 * hash_size);	
+	assert(mtllib_sig_buffer_condensed_sig_len(sig, hash_size) == expected_size);
+	assert(mtllib_sig_buffer_condensed_sig_len(NULL, hash_size) == 0);
+
+	mtllib_buffer_free(sig);
+
+	assert(mtllib_buffer_initialize(&sig, 75, NULL) == MTLLIB_OK);
+	assert(mtllib_sig_buffer_condensed_sig_len(sig, hash_size) == 0);	
+
+	mtllib_buffer_free(sig);	
+
+	return 0;
+}

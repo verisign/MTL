@@ -31,50 +31,23 @@
 # 	POSSIBILITY OF SUCH DAMAGE.
 #
 
+# Need to following dependency for access to openssl/liboqs.so
+FROM pqc_base:latest AS base_image
 
-# Use an official fedora minimal base project container
-FROM registry.fedoraproject.org/fedora-minimal:latest AS base_image
+# Install python in this container for the notebook
+# RUN dnf search python3.12
+RUN dnf install -y python3.12 python3-pip
+# RUN dnf install python3-pip
 
-USER root
-RUN dnf -y install gcc git perl make cmake libtool autoconf
+# Install Python dependencies
+RUN pip3 install --no-cache-dir jupyterlab dnspython
 
-RUN echo "/usr/local/lib64" > /etc/ld.so.conf.d/crypto.conf
+# Setup working directory
+RUN mkdir -p /app/jupyter/
+COPY examples/demo/ /app/jupyter/
+WORKDIR /app/jupyter
 
-# Set the working directory in the container
-RUN mkdir -p /usr/local/app
-WORKDIR /usr/local/app
+# Expose the default JupyterLab promoteEXPOSE 8888
 
-#######################################
-# Build the latest OpenSSL image
-#######################################
-RUN git clone https://github.com/openssl/openssl.git --branch openssl-3.6.0
-RUN cd openssl && \
-    ./config && \
-    make && \
-    make install_sw
-
-#######################################
-# Build the latest LIBOQS image
-#######################################
-RUN git clone https://github.com/open-quantum-safe/liboqs --branch 0.16.0
-RUN cd liboqs && \
-   mkdir -p build && \
-   cd build && \
-   rm -rf CMakeCache.txt && \
-   cmake -DBUILD_SHARED_LIBS=ON -DCMAKE_INSTALL_PREFIX=/usr/local .. && \
-   make && \
-   make install
-
-
-
-#######################################
-# Build the minimal image
-#######################################
-FROM registry.fedoraproject.org/fedora-minimal:latest AS core-pqc
-
-RUN echo "/usr/local/lib64" > /etc/ld.so.conf.d/crypto.conf
-# Get the include files
-COPY --from=base_image /usr/local/include /usr/local/include
-# Get the binary files (e.g. openssl)
-COPY --from=base_image /usr/local/lib64 /usr/local/lib64
-RUN ldconfig -v
+# End with a CMD syntax
+CMD ["jupyter-lab","--ip=0.0.0.0","--allow-root","--no-browser","--NotebookApp.token=''","--NotebookApp.password=''"]

@@ -1,9 +1,9 @@
 # MTL
-MTL Reference Library Implementation based on [draft-harvey-cfrg-mtl-mode-00](https://datatracker.ietf.org/doc/draft-harvey-cfrg-mtl-mode/)
+MTL Reference Library Implementation based on [draft-kaizer-dnsop-ml-dsa-mtl-dnssec-01](https://datatracker.ietf.org/doc/draft-kaizer-dnsop-ml-dsa-mtl-dnssec/)
 
 ## Dependencies
 * libcrypto from openssl version 3.1.0 or newer (or substitute crypto operations to replace the spx_funcs.c functions)
-* liboqs version 0.14.0 or newer (for the examples).  To include the liboqs library as a statically linked library change the -loqs to -l:_path_/liboqs.a in the examples/Makefile.am. 
+* liboqs version 0.16.0 or newer (for the examples).  To include the liboqs library as a statically linked library change the -loqs to -l:_path_/liboqs.a in the examples/Makefile.am. 
 * Applications using the MTL Reference Library should also link with the C math library (-lm)
 
 ## Configuring the build environment
@@ -234,13 +234,11 @@ MTL mode is described in more detail in this paper co-authored by Verisign resea
  
 Verisign has announced public, royalty-free licenses to certain intellectual property related to MTL mode in furtherance of IETF standardization which helps support the security, stability and resiliency of the Domain Name System (DNS) and the internet. For more information about the licenses, see the following IETF IPR declarations or updates thereto:
 
-* https://datatracker.ietf.org/ipr/6176/
-* https://datatracker.ietf.org/ipr/6175/
-* https://datatracker.ietf.org/ipr/6174/
-* https://datatracker.ietf.org/ipr/6173/
-* https://datatracker.ietf.org/ipr/6172/
-* https://datatracker.ietf.org/ipr/6171/
-* https://datatracker.ietf.org/ipr/6170/
+* https://datatracker.ietf.org/ipr/7392/
+* https://datatracker.ietf.org/ipr/7391/
+* https://datatracker.ietf.org/ipr/7390/
+* https://datatracker.ietf.org/ipr/7389/
+* https://datatracker.ietf.org/ipr/7388/
 
 Subject to the licenses referenced above and conditions thereof:
  

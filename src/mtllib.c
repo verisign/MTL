@@ -68,7 +68,7 @@ MTLLIB_STATUS mtllib_key_new(char *keystr, MTLLIB_CTX **ctx)
         return MTLLIB_BAD_ALGORITHM;
     }
 
-    if (mtllib_util_setup_sig_scheme(mtllib_ctx->algo_params->library, mtllib_ctx, NULL, 0, NULL, 0, NULL) != MTLLIB_OK)
+    if (mtllib_util_setup_sig_scheme(mtllib_ctx->algo_params->library, mtllib_ctx, NULL, 0, NULL, 0, NULL, MTL_PRIVATE_KEY) != MTLLIB_OK)
     {
         mtllib_key_free(mtllib_ctx);
         return MTLLIB_BAD_ALGORITHM;
@@ -191,7 +191,8 @@ MTLLIB_STATUS mtllib_pubkey_from_buffer(char *keystr, MTLLIB_CTX **ctx, MTLLIB_B
                                      mtllib_ctx, NULL, 0,
                                      mtllib_buffer_data_ptr(pubkey),
                                      mtllib_buffer_in_use(pubkey),
-                                    NULL) != MTLLIB_OK)
+                                    NULL,
+                                    MTL_PUBLIC_KEY) != MTLLIB_OK)
     {
         LOG_ERROR("Key Setup Failed");
         mtllib_key_free(mtllib_ctx);
@@ -301,7 +302,8 @@ MTLLIB_STATUS mtllib_key_from_buffer(MTLLIB_BUFFER *buffer, MTLLIB_CTX **ctx)
     if (mtllib_util_setup_sig_scheme(mtllib_ctx->algo_params->library,
                                      mtllib_ctx, sk, sk_len,
                                      pk, pk_len,
-                                     &sid) != MTLLIB_OK)
+                                     &sid,
+                                     MTL_PRIVATE_KEY) != MTLLIB_OK)
     {
         free(sk);
         free(pk);
@@ -529,7 +531,7 @@ MTLLIB_STATUS mtllib_key_to_buffer(MTLLIB_CTX *ctx, MTLLIB_BUFFER *buffer)
 }
 
 /**
- * MTL Library append a message to the node set with default empty ctx_str
+ * MTL Library append a message to the node set with default null ctx_str
  * @param ctx      MTL context to use
  * @param msg      input message buffer
  * @param mtl_node handle for the appended message
@@ -753,7 +755,8 @@ MTLLIB_STATUS mtllib_sign_get_signed_ladder(MTLLIB_CTX *ctx, MTLLIB_BUFFER *ladd
                      ctx->secret_key);
     }
     else {
-        // WARNING: OQS does not yet support context strings for this scheme
+        // OQS_SIG_sign_with_ctx_str() supports the use of context strings
+        // Since the context string MUST be null as per draft-kaizer-dnsop-ml-dsa-mtl-dnssec-00, OQS_SIG_sign() is used instead
         oqs_return_code = OQS_SIG_sign(ctx->signature, 
                      ladder_sig + 4 + ladder_buffer_len, &ladder_sig_len, 
                      ladder_buffer, ladder_buffer_len, 
@@ -841,7 +844,7 @@ MTLLIB_STATUS mtllib_sign_get_full_sig(MTLLIB_CTX *ctx, MTL_HANDLE *handle, MTLL
 }
 
 /**
- * MTL Library verify a signature (full or condensed) with default empty context
+ * MTL Library verify a signature (full or condensed) with default null context
  * @param ctx           pointer to the MTL library key context
  * @param msg           msg to authenticate
  * @param sig           pointer to the signature bytes
@@ -862,7 +865,7 @@ MTLLIB_STATUS mtllib_verify(MTLLIB_CTX *ctx,
  * MTL Library verify a signature (full or condensed)
  * @param ctx        input buffer holding the key
  * @param msg           msg to authenticate
- * @param ctx_str       context string with which to authenticate msg
+ * @param ctx_str       context string with which to authenticate msg; MUST be null as per draft-kaizer-dnsop-ml-dsa-mtl-dnssec-00
  * @param sig           pointer to the signature bytes
  * @param ladder        optional pointer to pre-verified ladder (for condensed signatures)
  * @param condensed_len optional pointer that will be filled in to the condensed length
@@ -1090,7 +1093,8 @@ MTLLIB_STATUS mtllib_verify_signed_ladder(MTLLIB_CTX *ctx, MTLLIB_BUFFER *buffer
                        ctx->public_key);
     }
     else {
-        // WARNING: OQS does not yet support context strings for this scheme
+        // OQS_SIG_verify_with_ctx_str() supports the use of context strings
+        // Since the context string MUST be null as per draft-kaizer-dnsop-ml-dsa-mtl-dnssec-00, OQS_SIG_verify() is used instead
         oqs_return_code = OQS_SIG_verify(ctx->signature, mtllib_buffer_data_ptr(buffer), ladder_len,
                        mtllib_buffer_data_ptr(buffer) + 4 + ladder_len, ctx->signature->length_signature, 
                        ctx->public_key);
@@ -1119,20 +1123,20 @@ size_t mtllib_sig_get_signed_ladder_size(MTLLIB_CTX *ctx) {
     }
     total_rungs = mtl_bit_width(ctx->mtl->nodes.leaf_count);
 
-    // Rung size is: (from MTL Mode Draft #8 Section 7.2)
+    // Rung size is: (from draft-kaizer-dnsop-ml-dsa-mtl-dnssec-00 section 5.1.2.1)
     //     Left Index  (MTL_INDEX_LEN bytes)
     //     Right Index (MTL_INDEX_LEN bytes)
     //     Rung Hash   (sec_param bytes)
     rung_size = MTL_INDEX_LEN  + MTL_INDEX_LEN + ctx->algo_params->sec_param;
 
-    // Ladder size is: (from MTL Mode Draft #8 Section 7.1)
+    // Ladder size is: (from draft-kaizer-dnsop-ml-dsa-mtl-dnssec-00 section 5.1.2.1)
     //     Flags          (2 bytes)
     //     SID            (sec_param *2 bytes)
     //     Rung Count     (2 bytes) 
     //     Size of rungs  (total_rungs * rung_size)
     ladder_size = 2 + (ctx->algo_params->sec_param *2) + 2 + (total_rungs * rung_size);
 
-    // Signed ladder size is: (from MTL Mode Draft #8 Section 9.3)
+    // Signed ladder size is: (from draft-kaizer-dnsop-ml-dsa-mtl-dnssec-00 section 5.1.2.1)
     //      Ladder Size    (see calc above)
     //      Signature Len  (4 bytes)
     //      Signature Data (signature specific)
@@ -1164,11 +1168,17 @@ uint16_t mtllib_sig_buffer_get_hash_size(char* keystr) {
 MTLLIB_STATUS mtllib_sig_buffer_get_sid(MTLLIB_BUFFER *buffer,
                                         uint16_t hash_size, SERIESID* sid)
 {
-    if((buffer == NULL)||(mtllib_buffer_in_use(buffer) < 10)) {
+    if((buffer == NULL)||(mtllib_buffer_in_use(buffer) < 2 + 32)) {
         return MTLLIB_BUFFER_ISSUE;
     }
+    if(sid == NULL) {
+        return MTLLIB_NULL_PARAMS;
+    }
     sid->length = hash_size * 2;
-    memcpy(sid->id, buffer->buffer_data, sid->length);
+    /* The SID can be found after the following fields
+     * Flags: 2 bytes
+     */
+    memcpy(sid->id, buffer->buffer_data+2, sid->length);
 
     return MTLLIB_OK;
 }
@@ -1186,16 +1196,19 @@ MTLLIB_STATUS mtllib_sig_buffer_get_leaf_index(MTLLIB_BUFFER *buffer,
 {
     size_t buffer_offset = 0;
 
-    if((buffer == NULL)||(mtllib_buffer_in_use(buffer) < 10)) {
+    if((buffer == NULL)||(mtllib_buffer_in_use(buffer) < 2 + 32 + 16 + sizeof(MTL_INDEX))) {
         return MTLLIB_BUFFER_ISSUE;
+    }
+    if(leaf_index == NULL) {
+        return MTLLIB_NULL_PARAMS;
     }
 
     /* The leaf index can be found after the following fields
-     * SID: 2 * hash_size bytes
      * Flags: 2 bytes
+     * SID: 2 * hash_size bytes
      * Randomizer: hash_size bytes
      */
-    buffer_offset = (hash_size * 2) + 2 + hash_size;
+    buffer_offset = 2 + (hash_size * 2) + hash_size;
     bytes_to_mtl_index(&buffer->buffer_data[buffer_offset], leaf_index);
 
     return MTLLIB_OK;
@@ -1212,21 +1225,22 @@ MTLLIB_STATUS mtllib_sig_buffer_get_leaf_index(MTLLIB_BUFFER *buffer,
 size_t mtllib_sig_buffer_condensed_sig_len(MTLLIB_BUFFER *buffer,
                                         uint16_t hash_size) {
     size_t buffer_offset = 0;
-    SERIESID sid;
     size_t mtl_id_len = sizeof(MTL_INDEX);
     uint16_t sib_hash_count = 0;
 
-    mtllib_sig_buffer_get_sid(buffer, hash_size, &sid);
+    if((buffer == NULL)||(mtllib_buffer_in_use(buffer) < 2 + (2 * hash_size) + hash_size + (mtl_id_len * 3) + 2)) {
+        return 0;
+    }
 
     /* The condensed signature is the following length
-     * SID: 2 * hash_size bytes
      * Flags: 2 bytes
+     * SID: 2 * hash_size bytes
      * Randomizer: hash_size bytes
-     * Lead Index: MTL_ID bytes
+     * Leaf Index: MTL_ID bytes
      * Rung Left Index: MTL_ID bytes
      * Rung Right Index: MTL_ID bytes
      */
-    buffer_offset = (2 * hash_size) + 2 + hash_size + (mtl_id_len * 3);
+    buffer_offset = 2 + (2 * hash_size) + hash_size + (mtl_id_len * 3);
      // Sibiling Hash Count: 2 bytes
     buffer_offset += bytes_to_uint16(&buffer->buffer_data[buffer_offset], &sib_hash_count);
      // Sibiling Hash Values: count * hash_size bytes

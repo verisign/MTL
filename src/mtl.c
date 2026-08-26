@@ -70,18 +70,18 @@ MTLSTATUS mtl_set_scheme_functions(MTL_CTX * ctx,
 
 /************************************************************************
  * The following algorithms are implementations from the draft 
- * draft-harvey-cfrg-mtl-mode-00
+ * draft-kaizer-dnsop-ml-dsa-mtl-dnssec-00
  ************************************************************************/
 
 /*****************************************************************
- * Algorithm 3: Initializing a MTL Node Set.
- * mtl_initns from draft-harvey-cfrg-mtl-mode-00 Section 8.3
+ * Initializing a MTL Node Set.
 ******************************************************************
  * @param ctx,  the context for this MTL Node Set
  * @param sid,  series identifier for this node set
+ * @param pub_key, flag indicating if this is a public key or private key 
  * @return MTLSTATUS: MTL_OK if successful
  */
-MTLSTATUS mtl_initns(MTL_CTX ** mtl_ctx, SERIESID * sid)
+MTLSTATUS mtl_initns(MTL_CTX ** mtl_ctx, SERIESID * sid, uint8_t pub_key)
 {
 	if ((mtl_ctx == NULL) || (sid == NULL)) {
 		return MTL_NULL_PTR;
@@ -96,7 +96,7 @@ MTLSTATUS mtl_initns(MTL_CTX ** mtl_ctx, SERIESID * sid)
 	ctx->hash_msg = NULL;
 	ctx->hash_leaf = NULL;
 	ctx->hash_int = NULL;
-	mtl_node_set_init(&ctx->nodes, sid);
+	mtl_node_set_init(&ctx->nodes, sid, pub_key);
 
 	*mtl_ctx = ctx;
 
@@ -104,8 +104,9 @@ MTLSTATUS mtl_initns(MTL_CTX ** mtl_ctx, SERIESID * sid)
 }
 
 /*****************************************************************
-* Algorithm 4: MTL Node Set Append.
-* mtl_append from draft-harvey-cfrg-mtl-mode-00 Section 8.4
+* MTL Node Set Append.
+* Append a data value to a MTL node set, adding a leaf node and internal nodes as needed 
+* to produce a new ladder covering the expanded series of data values
 ******************************************************************
  * @param ctx,  the context for this MTL Node Set
  * @param data_value: byte array of data_value data
@@ -243,8 +244,8 @@ MTLSTATUS mtl_node_set_update_parents(MTL_CTX * ctx, MTL_INDEX leaf_index)
 
 
 /*****************************************************************
-* Algorithm 5: Computing an Authentication Path for a Data Value.
-* mtl_authpath from draft-harvey-cfrg-mtl-mode-00 Section 8.5
+* Computing an Authentication Path for a Data Value.
+* From draft-kaizer-dnsop-ml-dsa-mtl-dnssec-00 section 5.1.1
 ******************************************************************
  * @param ctx,  the context for this MTL Node Set 
  * @param leaf_index: leaf node index of the data value to authenticate
@@ -319,8 +320,8 @@ AUTHPATH *mtl_authpath(MTL_CTX * ctx, MTL_INDEX leaf_index)
 }
 
 /*****************************************************************
- * Algorithm 6: Computing a Merkle Tree Ladder for a Node Set.
- * mtl_ladder from draft-harvey-cfrg-mtl-mode-00 Section 8.6
+ * Computing a Merkle Tree Ladder for a Node Set.
+ * From draft-kaizer-dnsop-ml-dsa-mtl-dnssec-00 section 5.1.2.1
  ****************************************************************** 
  * @param ctx,  the context for this MTL Node Set 
  * @return ladder, Merkle tree ladder for this node set, NULL on error
@@ -386,8 +387,8 @@ LADDER *mtl_ladder(MTL_CTX * ctx)
 }
 
 /*****************************************************************
- * Algorithm 7: Selecting a Ladder Rung.
- * mtl_rung from draft-harvey-cfrg-mtl-mode-00 Section 8.7
+ * Selecting a Ladder Rung.
+ * From draft-kaizer-dnsop-ml-dsa-mtl-dnssec-00 section 5.1.2.1
  ****************************************************************** 
  * @param auth_path, authentication path that needs to be covered
  * @param ladder, Merkle tree ladder to authenticate relative to
@@ -459,14 +460,14 @@ RUNG *mtl_rung(AUTHPATH * auth_path, LADDER * ladder)
 }
 
 /*****************************************************************
- * Algorithm 8: Verifying an Authentication Path.
- * mtl_verify from draft-harvey-cfrg-mtl-mode-00 Section 8.8
+ * Verifying an Authentication Path.
+ * From draft-kaizer-dnsop-ml-dsa-mtl-dnssec-00
  ****************************************************************** 
  * @param ctx,  the context for this MTL Node Set  
  * @param data_value: byte array of data_value data
  * @param data_value_len: length of the data_value byte array
- * @param ctx_str: byte array of context string
- * @param ctx_str_len: length of the ctx_str byte array
+ * @param ctx_str: byte array of context string; MUST be null as per draft-kaizer-dnsop-ml-dsa-mtl-dnssec-00
+ * @param ctx_str_len: length of the ctx_str byte array; MUST be a 1-octet representation of value 0
  * @param randomizer: (presumed) randomizer for corresponding leaf node
  * @param auth_path, (presumed) authentication path from corresponding
  *     leaf node to rung of ladder covering leaf node
