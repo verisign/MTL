@@ -81,7 +81,7 @@ uint8_t mtltest_mtl_generate_randomizer(void)
 	memset(&sid, 0, sizeof(SERIESID));
 	sid.length = 32;
 
-	assert(mtl_initns(&mtl_ctx, &sid) == MTL_OK);
+	assert(mtl_initns(&mtl_ctx, &sid, MTL_PRIVATE_KEY) == MTL_OK);
 
 	/** \todo Revisit this test when PRF randomizer support enabled
 	// Check that the seed is used for the randomizer
@@ -207,7 +207,7 @@ uint8_t mtltest_mtl_hash_and_append_random(void)
 	memset(&sid, 0, sizeof(SERIESID));
 	sid.length = 32;
 
-	assert(mtl_initns(&mtl_ctx, &sid) == MTL_OK);
+	assert(mtl_initns(&mtl_ctx, &sid, MTL_PRIVATE_KEY) == MTL_OK);
 	assert(mtl_set_scheme_functions(mtl_ctx, 1,
 					mtl_test_hash_leaf,
 					mtl_test_hash_int) == MTL_OK);
@@ -377,7 +377,7 @@ uint8_t mtltest_mtl_randomizer_and_authpath_random(void)
 	sid.length = 32;
 
 
-	assert(mtl_initns(&mtl_ctx, &sid) == MTL_OK);
+	assert(mtl_initns(&mtl_ctx, &sid, MTL_PRIVATE_KEY) == MTL_OK);
 	assert(mtl_set_scheme_functions(mtl_ctx, 1,
 					mtl_test_hash_leaf,
 					mtl_test_hash_int) == MTL_OK);
@@ -520,7 +520,7 @@ uint8_t mtltest_mtl_hash_and_verify_random(void)
 	sid.length = 32;
 
 
-	assert(mtl_initns(&mtl_ctx, &sid) == MTL_OK);
+	assert(mtl_initns(&mtl_ctx, &sid, MTL_PRIVATE_KEY) == MTL_OK);
 	assert(mtl_set_scheme_functions(mtl_ctx, 1,
 					mtl_test_hash_leaf,
 					mtl_test_hash_int) == MTL_OK);

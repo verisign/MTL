@@ -40,7 +40,7 @@
 
 /************************************************************************
  * The following algorithms are abstractions that use the constructs 
- * that are defined in draft-harvey-cfrg-mtl-mode-00 to simplify use.
+ * that are defined in draft-kaizer-dnsop-ml-dsa-mtl-dnssec-00 to simplify use.
  ************************************************************************/
 
 /*****************************************************************
@@ -113,8 +113,8 @@ MTLSTATUS mtl_randomizer_free(RANDOMIZER * mtl_random)
  * @param ctx:         the context for this MTL Node Set
  * @param message:     byte array of message data
  * @param message_len: byte length of the message data
- * @param ctx_str:     byte array of context string
- * @param ctx_str_len: byte length of the context string
+ * @param ctx_str:     byte array of context string; must be null as per draft-kaizer-dnsop-ml-dsa-mtl-dnssec-00
+ * @param ctx_str_len: byte length of the context string; must be a 1-octect representation of value 0
  * @param node_id:     return value index of the leaf node that was appended
  * @return MTL_OK on success
  */
@@ -130,7 +130,6 @@ MTLSTATUS mtl_hash_and_append(MTL_CTX * ctx,
 		return MTL_NULL_PTR;
 	}
 
-	// mtl_append from draft-harvey-cfrg-mtl-mode-00 Section 8.4
 	leaf_index = ctx->nodes.leaf_count;
 	
 	// Insert the leaf in the MTL node set
@@ -194,8 +193,8 @@ MTLSTATUS mtl_randomizer_and_authpath(MTL_CTX * ctx, MTL_INDEX leaf_index,
  * @param ctx:  the context for this MTL Node Set
  * @param message: message to verify
  * @param message_len: length of the message in bytes
- * @param ctx_str: context string of the message
- * @param ctx_str_len: length of the context string in bytes
+ * @param ctx_str: context string of the message; must be null as per draft-kaizer-dnsop-ml-dsa-mtl-dnssec-00
+ * @param ctx_str_len: length of the context string in bytes; must be a 1-octect representation of value 0
  * @param randomizer: randomizer value for this leaf node
  * @param auth_path: authenticaiton path to verify
  * @param assoc_rung: rung used to verify this auth path

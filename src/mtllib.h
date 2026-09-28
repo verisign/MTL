@@ -202,7 +202,7 @@ size_t mtllib_key_to_buffer_length(MTLLIB_CTX *ctx);
 MTLLIB_STATUS mtllib_key_to_buffer(MTLLIB_CTX *ctx, MTLLIB_BUFFER *buffer);
 
 /**
- * MTL Library append a message to the node set with default empty ctx_str
+ * MTL Library append a message to the node set with default null ctx_str
  * @param ctx      MTL context to use
  * @param msg      input message buffer
  * @param mtl_node handle for the appended message
@@ -282,7 +282,7 @@ size_t mtllib_sign_get_full_sig_length(MTLLIB_CTX *ctx, MTL_HANDLE *handle);
 MTLLIB_STATUS mtllib_sign_get_full_sig(MTLLIB_CTX *ctx, MTL_HANDLE *handle, MTLLIB_BUFFER *sig);
 
 /**
- * MTL Library verify a signature (full or condensed) with default empty context
+ * MTL Library verify a signature (full or condensed) with default null context
  * @param ctx           pointer to the MTL library key context
  * @param msg           msg to authenticate
  * @param sig           pointer to the signature bytes
@@ -300,7 +300,7 @@ MTLLIB_STATUS mtllib_verify(MTLLIB_CTX *ctx,
  * MTL Library verify a signature (full or condensed)
  * @param ctx           pointer to the MTL library key context
  * @param msg           msg to authenticate
- * @param ctx_str       context string with which to authenticate msg
+ * @param ctx_str       context string with which to authenticate msg; MUST be null as per draft-kaizer-dnsop-ml-dsa-mtl-dnssec-00
  * @param sig           pointer to the signature bytes
  * @param ladder        optional pointer to pre-verified ladder (for condensed signatures)
  * @param condensed_len optional pointer that will be filled in to the condensed length

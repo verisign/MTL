@@ -173,6 +173,7 @@ static MTLLIB_STATUS mtllib_util_setup_sig_scheme_liboqs(MTLLIB_CTX *mtllib_ctx,
  * @param pk          Byte array containin the public key
  * @param pk_len      Length of the public key byte array
  * @param sid         Series ID value for MTL series (NULL for new keys)
+* @param pub_key      flag indicating if this is a public key or private key
  * @return MTLLIB_STATUS MTLLIB_OK on success
  */
 MTLLIB_STATUS mtllib_util_setup_sig_scheme(MTL_CRYPTO_LIBRARY lib,
@@ -181,7 +182,8 @@ MTLLIB_STATUS mtllib_util_setup_sig_scheme(MTL_CRYPTO_LIBRARY lib,
                                            size_t sk_len,
                                            uint8_t *pk,
                                            size_t pk_len,
-                                           SERIESID *sid)
+                                           SERIESID *sid,
+                                           uint8_t pub_key)
 {
     SERIESID *setup_sid = NULL;
     MTLLIB_STATUS setup_status = MTLLIB_OK;
@@ -222,7 +224,7 @@ MTLLIB_STATUS mtllib_util_setup_sig_scheme(MTL_CRYPTO_LIBRARY lib,
     {
         setup_sid = sid;
     }
-    mtl_initns(&mtllib_ctx->mtl, setup_sid);
+    mtl_initns(&mtllib_ctx->mtl, setup_sid, pub_key);
 
     if (sid == NULL)
     {

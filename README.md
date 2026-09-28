@@ -1,9 +1,9 @@
 # MTL
-MTL Reference Library Implementation based on [draft-harvey-cfrg-mtl-mode-00](https://datatracker.ietf.org/doc/draft-harvey-cfrg-mtl-mode/)
+MTL Reference Library Implementation based on [draft-kaizer-dnsop-ml-dsa-mtl-dnssec-02](https://datatracker.ietf.org/doc/draft-kaizer-dnsop-ml-dsa-mtl-dnssec/)
 
 ## Dependencies
 * libcrypto from openssl version 3.1.0 or newer (or substitute crypto operations to replace the spx_funcs.c functions)
-* liboqs version 0.14.0 or newer (for the examples).  To include the liboqs library as a statically linked library change the -loqs to -l:_path_/liboqs.a in the examples/Makefile.am. 
+* liboqs version 0.16.0 or newer (for the examples).  To include the liboqs library as a statically linked library change the -loqs to -l:_path_/liboqs.a in the examples/Makefile.am. 
 * Applications using the MTL Reference Library should also link with the C math library (-lm)
 
 ## Configuring the build environment
@@ -222,7 +222,7 @@ Usage: mtlverify [options] algorithm_str key_file message_file signature_file [l
 Randomization is defined in the schemes table. It needs to match the underlying signature scheme randomization strategy, which can be a compile time decision for some libraries.
 
 ## MTL Tree Sizes
-The page and record sizes for MTL mode are defined in the src/mtl_node_set.h file. Larger sizes allows for larger trees but requires more resources.  This value can be tailored to support smaller instances if desired.  The default values are 1 Megabyte per page with 1024 pages resulting in 1 Gigabyte of hashes in memory.  For a 128 bit hash this results in a max of 67,108,864 hashes (~33,554,432 messages signed) and for a 256 bit hash this results in 33,554,432 hashes (~16,777,216 messages signed)
+The page and record sizes for MTL mode are defined in the src/mtl_node_set.h file. Larger sizes allows for larger trees but requires more resources.  This value can be tailored to support smaller instances if desired.  The default values are 1 Megabyte per page with 8192 pages resulting in 8 Gigabytes of hashes in memory.  For a 128 bit hash this results in a max of 536,870,912 hashes (~268,435,456 messages signed) and for a 256 bit hash this results in 268,435,456 hashes (~134,217,728 messages signed)
 
 ## Open Items
 * MTL Provider is tested through the application in the test folder and the example application. These applications are to demonstrate the capability and are not production worthy.  Some code paths are not implemented or are not fully tested. 
@@ -234,13 +234,11 @@ MTL mode is described in more detail in this paper co-authored by Verisign resea
  
 Verisign has announced public, royalty-free licenses to certain intellectual property related to MTL mode in furtherance of IETF standardization which helps support the security, stability and resiliency of the Domain Name System (DNS) and the internet. For more information about the licenses, see the following IETF IPR declarations or updates thereto:
 
-* https://datatracker.ietf.org/ipr/6176/
-* https://datatracker.ietf.org/ipr/6175/
-* https://datatracker.ietf.org/ipr/6174/
-* https://datatracker.ietf.org/ipr/6173/
-* https://datatracker.ietf.org/ipr/6172/
-* https://datatracker.ietf.org/ipr/6171/
-* https://datatracker.ietf.org/ipr/6170/
+* https://datatracker.ietf.org/ipr/7392/
+* https://datatracker.ietf.org/ipr/7391/
+* https://datatracker.ietf.org/ipr/7390/
+* https://datatracker.ietf.org/ipr/7389/
+* https://datatracker.ietf.org/ipr/7388/
 
 Subject to the licenses referenced above and conditions thereof:
  

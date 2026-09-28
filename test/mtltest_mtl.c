@@ -111,13 +111,25 @@ uint8_t mtltest_mtl_initns(void)
 	memset(&sid, 0, sizeof(SERIESID));
 	sid.length = 32;
 
-    assert(mtl_initns(&mtl_ctx, &sid) == MTL_OK);
+    assert(mtl_initns(&mtl_ctx, &sid, MTL_PRIVATE_KEY) == MTL_OK);
     assert(&mtl_ctx->sid != &sid);
     assert(mtl_ctx->sid.length == sid.length);
     assert(memcmp(&mtl_ctx->sid.id, &sid.id, sid.length) == 0);
     assert(mtl_ctx->randomize == 0);
     assert(mtl_ctx->hash_leaf == NULL);
     assert(mtl_ctx->hash_int == NULL);
+	assert(mtl_ctx->nodes.pub_key == MTL_PRIVATE_KEY);
+
+    assert(mtl_free(mtl_ctx) == MTL_OK);
+
+    assert(mtl_initns(&mtl_ctx, &sid, MTL_PUBLIC_KEY) == MTL_OK);
+    assert(&mtl_ctx->sid != &sid);
+    assert(mtl_ctx->sid.length == sid.length);
+    assert(memcmp(&mtl_ctx->sid.id, &sid.id, sid.length) == 0);
+    assert(mtl_ctx->randomize == 0);
+    assert(mtl_ctx->hash_leaf == NULL);
+    assert(mtl_ctx->hash_int == NULL);
+	assert(mtl_ctx->nodes.pub_key == MTL_PUBLIC_KEY);
 
     assert(mtl_free(mtl_ctx) == MTL_OK);
 
@@ -134,8 +146,8 @@ uint8_t mtltest_mtl_initns_null(void)
 	sid.length = 32;
 	memset(sid.id, 0, sid.length);
 
-	assert(mtl_initns(NULL, &sid) == MTL_NULL_PTR);
-	assert(mtl_initns(&ctx, NULL) == MTL_NULL_PTR);
+	assert(mtl_initns(NULL, &sid, MTL_PRIVATE_KEY) == MTL_NULL_PTR);
+	assert(mtl_initns(&ctx, NULL, MTL_PRIVATE_KEY) == MTL_NULL_PTR);
 
 	return 0;
 }
@@ -151,7 +163,7 @@ uint8_t mtltest_mtl_set_scheme_functions(void)
 	sid.length = 32;
 	memset(sid.id, 0, sid.length);
 
-	assert(mtl_initns(&mtl_ctx, &sid) == MTL_OK);
+	assert(mtl_initns(&mtl_ctx, &sid, MTL_PRIVATE_KEY) == MTL_OK);
 	assert(sid.length == 32);
 	assert(memcmp(&mtl_ctx->sid.id, &sid.id, sid.length) == 0);
 	assert(mtl_ctx->randomize == 0);
@@ -182,7 +194,7 @@ uint8_t mtltest_mtl_set_scheme_functions_null(void)
 	memset(&sid.id, 0, MTL_SID_SIZE);
 
 
-	assert(mtl_initns(&mtl_ctx, &sid) == MTL_OK);
+	assert(mtl_initns(&mtl_ctx, &sid, MTL_PRIVATE_KEY) == MTL_OK);
 	assert(mtl_ctx->sid.length == sid.length);
 	assert(memcmp(mtl_ctx->sid.id, &sid.id, sid.length) == 0);
 	assert(mtl_ctx->randomize == 0);
@@ -353,7 +365,7 @@ uint8_t mtltest_mtl_append_random(void)
 	sid.length = 8;
 	memset(sid.id, 0, sid.length);
 
-	assert(mtl_initns(&mtl_ctx, &sid) == MTL_OK);
+	assert(mtl_initns(&mtl_ctx, &sid, MTL_PRIVATE_KEY) == MTL_OK);
 	assert(mtl_set_scheme_functions(mtl_ctx, 1,
 					mtl_test_hash_leaf,
 					mtl_test_hash_int) == MTL_OK);
@@ -381,6 +393,16 @@ uint8_t mtltest_mtl_append_random(void)
 
 	assert(mtl_free(mtl_ctx) == MTL_OK);
 
+	assert(mtl_initns(&mtl_ctx, &sid, MTL_PUBLIC_KEY) == MTL_OK);
+	assert(mtl_set_scheme_functions(mtl_ctx, 1,
+					mtl_test_hash_leaf,
+					mtl_test_hash_int) == MTL_OK);
+
+	for (i = 0; i < 8; i++) {
+		assert(mtl_append(mtl_ctx, (uint8_t *) "Test Data String", 16, NULL, 0, i) == MTL_ERROR);
+	}
+	assert(mtl_free(mtl_ctx) == MTL_OK);
+
 	return 0;
 }
 
@@ -395,7 +417,7 @@ uint8_t mtltest_mtl_append_null(void)
 	sid.length = 8;
 	memset(sid.id, 0, sid.length);
 
-	assert(mtl_initns(&mtl_ctx, &sid) == MTL_OK);
+	assert(mtl_initns(&mtl_ctx, &sid, MTL_PRIVATE_KEY) == MTL_OK);
 	assert(mtl_set_scheme_functions(mtl_ctx, 1,
 					mtl_test_hash_leaf,
 					mtl_test_hash_int) == MTL_OK);
@@ -439,7 +461,7 @@ uint8_t mtltest_mtl_node_set_update_parents(void) {
 	sid.length = 2*hash_len;
 	memset(sid.id, 0, sid.length);
 
-	assert(mtl_initns(&mtl_ctx, &sid) == MTL_OK);
+	assert(mtl_initns(&mtl_ctx, &sid, MTL_PRIVATE_KEY) == MTL_OK);
 	assert(mtl_set_scheme_functions(mtl_ctx, 1,
 					mtl_test_hash_leaf,
 					mtl_test_hash_int) == MTL_OK);
@@ -604,7 +626,7 @@ uint8_t mtltest_mtl_authpath_multi(void)
 	sid.length = 32;
 	memset(sid.id, 0, MTL_SID_SIZE);
 
-	assert(mtl_initns(&mtl_ctx, &sid) == MTL_OK);
+	assert(mtl_initns(&mtl_ctx, &sid, MTL_PRIVATE_KEY) == MTL_OK);
 	assert(mtl_set_scheme_functions(mtl_ctx, 1,
 					mtl_test_hash_leaf,
 					mtl_test_hash_int) == MTL_OK);
@@ -675,7 +697,7 @@ uint8_t mtltest_mtl_authpath_null(void)
 	sid.length = 32;
 	memset(sid.id, 0, sid.length);
 
-	assert(mtl_initns(&mtl_ctx, &sid) == MTL_OK);
+	assert(mtl_initns(&mtl_ctx, &sid, MTL_PRIVATE_KEY) == MTL_OK);
 	assert(mtl_set_scheme_functions(mtl_ctx, 1,
 					mtl_test_hash_leaf,
 					mtl_test_hash_int) == MTL_OK);
@@ -714,7 +736,7 @@ uint8_t mtltest_mtl_ladder_multi(void)
 	sid.length = 32;
 	memset(sid.id, 0, MTL_SID_SIZE);
 
-	assert(mtl_initns(&mtl_ctx, &sid) == MTL_OK);
+	assert(mtl_initns(&mtl_ctx, &sid, MTL_PRIVATE_KEY) == MTL_OK);
 	assert(mtl_set_scheme_functions(mtl_ctx, 1,
 					mtl_test_hash_leaf,
 					mtl_test_hash_int) == MTL_OK);
@@ -762,7 +784,7 @@ uint8_t mtltest_mtl_ladder_null(void)
 	sid.length = 32;
 	memset(sid.id, 0, sid.length);
 
-	assert(mtl_initns(&mtl_ctx, &sid) == MTL_OK);
+	assert(mtl_initns(&mtl_ctx, &sid, MTL_PRIVATE_KEY) == MTL_OK);
 	assert(mtl_set_scheme_functions(mtl_ctx, 1,
 					mtl_test_hash_leaf,
 					mtl_test_hash_int) == MTL_OK);
@@ -811,7 +833,7 @@ uint8_t mtltest_mtl_rung(void)
 	sid.length = 32;
 	memset(sid.id, 0, sid.length);
 
-	assert(mtl_initns(&mtl_ctx, &sid) == MTL_OK);
+	assert(mtl_initns(&mtl_ctx, &sid, MTL_PRIVATE_KEY) == MTL_OK);
 	assert(mtl_set_scheme_functions(mtl_ctx, 1,
 					mtl_test_hash_leaf,
 					mtl_test_hash_int) == MTL_OK);
@@ -884,7 +906,7 @@ uint8_t mtltest_mtl_rung_null(void)
 	sid.length = 32;
 	memset(sid.id, 0, sid.length);
 
-	assert(mtl_initns(&mtl_ctx, &sid) == MTL_OK);
+	assert(mtl_initns(&mtl_ctx, &sid, MTL_PRIVATE_KEY) == MTL_OK);
 	assert(mtl_set_scheme_functions(mtl_ctx, 1,
 					mtl_test_hash_leaf,
 					mtl_test_hash_int) == MTL_OK);
@@ -1022,7 +1044,7 @@ uint8_t mtltest_mtl_verify_rand(void)
 	sid.length = 32;
 	memset(sid.id, 0, sid.length);
 
-	assert(mtl_initns(&mtl_ctx, &sid) == MTL_OK);
+	assert(mtl_initns(&mtl_ctx, &sid, MTL_PRIVATE_KEY) == MTL_OK);
 	assert(mtl_set_scheme_functions(mtl_ctx, 1,
 					mtl_node_set_hash_leaf_sha2,
 					mtl_node_set_hash_int_sha2) == MTL_OK);
@@ -1040,7 +1062,7 @@ uint8_t mtltest_mtl_verify_rand(void)
 	assert(rung != NULL);
 
 	// Make a new context for verfication (it doesn't have the secret key data)
-	assert(mtl_initns(&mtl_verify_ctx, &sid) == MTL_OK);
+	assert(mtl_initns(&mtl_verify_ctx, &sid, MTL_PRIVATE_KEY) == MTL_OK);
 	assert(mtl_set_scheme_functions(mtl_verify_ctx, 1,
 					mtl_node_set_hash_leaf_sha2,
 					mtl_node_set_hash_int_sha2) == MTL_OK);
@@ -1080,7 +1102,7 @@ uint8_t mtltest_mtl_verify_null(void)
 	sid.length = 8;
 	memset(sid.id, 0, sid.length);
 
-	assert(mtl_initns(&mtl_ctx, &sid) == MTL_OK);
+	assert(mtl_initns(&mtl_ctx, &sid, MTL_PRIVATE_KEY) == MTL_OK);
 	assert(mtl_set_scheme_functions(mtl_ctx, 1,
 					mtl_test_hash_leaf,
 					mtl_test_hash_int) == MTL_OK);
@@ -1096,7 +1118,7 @@ uint8_t mtltest_mtl_verify_null(void)
 	rung = mtl_rung(auth, ladder);
 
 	// Make a new context for verfication (it doesn't have the secret key data)
-	assert(mtl_initns(&mtl_verify_ctx, &sid) == MTL_OK);
+	assert(mtl_initns(&mtl_verify_ctx, &sid, MTL_PRIVATE_KEY) == MTL_OK);
 	assert(mtl_set_scheme_functions(mtl_verify_ctx, 1,
 					mtl_test_hash_leaf,
 					mtl_test_hash_int) == MTL_OK);

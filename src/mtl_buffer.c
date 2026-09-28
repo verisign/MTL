@@ -76,6 +76,12 @@ uint32_t mtl_auth_path_from_buffer(uint8_t *buffer, size_t buffer_size,
 		return 0;
 	}
 
+	// Authentication Path from draft-kaizer-dnsop-ml-dsa-mtl-dnssec-00 section 5.1.1
+	// Flags (2)
+	VERIFY_AUTH_BUFFER_LEN	(sig_ptr, sizeof(path->flags), sig_end_ptr, path, mtl_rand, auth_path);
+	sig_ptr += bytes_to_uint16(sig_ptr, &path->flags);
+	sig_size += sizeof(path->flags);
+
 	// SID (Variable - set by scheme)
 	path->sid.length = sid_len;
 	VERIFY_AUTH_BUFFER_LEN	(sig_ptr, sid_len, sig_end_ptr, path, mtl_rand, auth_path);
@@ -83,13 +89,7 @@ uint32_t mtl_auth_path_from_buffer(uint8_t *buffer, size_t buffer_size,
 	sig_ptr += sid_len;
 	sig_size += sid_len;
 
-	// Authentication Path from draft-harvey-cfrg-mtl-mode-00 Section 7.3
-	// Flags (2)
-	VERIFY_AUTH_BUFFER_LEN	(sig_ptr, sizeof(path->flags), sig_end_ptr, path, mtl_rand, auth_path);
-	sig_ptr += bytes_to_uint16(sig_ptr, &path->flags);
-	sig_size += sizeof(path->flags);
-
-	// Randomizer Auth from draft-harvey-cfrg-mtl-mode-00 Section 9.4
+	// Randomizer from draft-kaizer-dnsop-ml-dsa-mtl-dnssec-00 section 5.1.1
 	mtl_rand->value = malloc(hash_size);
 	if (mtl_rand->value == NULL) {
 		LOG_ERROR("Unable to allocate space for randomizer auth");
@@ -101,17 +101,17 @@ uint32_t mtl_auth_path_from_buffer(uint8_t *buffer, size_t buffer_size,
 	sig_ptr += mtl_rand->length;
 	sig_size += mtl_rand->length;
 
-	// Leaf Index (4)
+	// Leaf Index (8)
 	VERIFY_AUTH_BUFFER_LEN	(sig_ptr, sizeof(MTL_INDEX), sig_end_ptr, path, mtl_rand, auth_path);	
 	sig_ptr += bytes_to_mtl_index(sig_ptr, &path->leaf_index);
 	sig_size += sizeof(MTL_INDEX);
 
-	// Rung Left (4)
+	// Rung Left (8)
 	VERIFY_AUTH_BUFFER_LEN	(sig_ptr, sizeof(MTL_INDEX), sig_end_ptr, path, mtl_rand, auth_path);	
 	sig_ptr += bytes_to_mtl_index(sig_ptr, &path->rung_left);
 	sig_size += sizeof(MTL_INDEX);
 
-	// Rung Right (4)
+	// Rung Right (8)
 	VERIFY_AUTH_BUFFER_LEN	(sig_ptr, sizeof(MTL_INDEX), sig_end_ptr, path, mtl_rand, auth_path);	
 	sig_ptr += bytes_to_mtl_index(sig_ptr, &path->rung_right);
 	sig_size += sizeof(MTL_INDEX);
@@ -172,11 +172,11 @@ uint32_t mtl_auth_path_to_buffer(RANDOMIZER * randomizer, AUTHPATH * auth_path,
 		return 0;
 	}
 
-	// draft-harvey-cfrg-mtl-mode-08 Section 7.3
-	// Condensed Sig = randomizer + flags + SID + leaf index + target left index 
+	// Condensed signature from draft-kaizer-dnsop-ml-dsa-mtl-dnssec-00 section 5.1.1
+	// Condensed Sig = flags + SID + randomizer + leaf index + target left index 
 	//  + target right index + sibling count + list of siblings 
 	sig_size =
-	    randomizer->length + sizeof(auth_path->flags) + auth_path->sid.length
+	    sizeof(auth_path->flags) + auth_path->sid.length + randomizer->length
 		+ 3 * sizeof(MTL_INDEX) + sizeof(auth_path->sibling_hash_count)
 	    + (auth_path->sibling_hash_count * hash_size);
 	sig_buffer = malloc(sig_size);
@@ -186,25 +186,25 @@ uint32_t mtl_auth_path_to_buffer(RANDOMIZER * randomizer, AUTHPATH * auth_path,
 	}	
 	sig_ptr = sig_buffer;
 
+	// Authentication Path from draft-kaizer-dnsop-ml-dsa-mtl-dnssec-00 section 5.1.1
+	// Flags (2)
+	sig_ptr += uint16_to_bytes(sig_ptr, auth_path->flags);
+
 	// SID (Variable - set by scheme)
 	memcpy(sig_ptr, auth_path->sid.id, auth_path->sid.length);
 	sig_ptr += auth_path->sid.length;
 
-	// Authentication Path from draft-harvey-cfrg-mtl-mode-00 Section 7.3
-	// Flags (2)
-	sig_ptr += uint16_to_bytes(sig_ptr, auth_path->flags);
-
-	// Randomizer Auth from draft-harvey-cfrg-mtl-mode-00 Section 9.4
+	// Randomizer from draft-kaizer-dnsop-ml-dsa-mtl-dnssec-00 section 5.1.1
 	memcpy(sig_ptr, randomizer->value, randomizer->length);
 	sig_ptr += randomizer->length;
 
-	// Leaf Index (4)
+	// Leaf Index (8)
 	sig_ptr += mtl_index_to_bytes(sig_ptr, auth_path->leaf_index);
 
-	// Rung Left (4)
+	// Rung Left (8)
 	sig_ptr += mtl_index_to_bytes(sig_ptr, auth_path->rung_left);
 
-	// Rung Right (4)
+	// Rung Right (8)
 	sig_ptr += mtl_index_to_bytes(sig_ptr, auth_path->rung_right);
 
 	// Sibiling Node Count (2)
@@ -250,7 +250,7 @@ uint32_t mtl_ladder_from_buffer(uint8_t *buffer, size_t buffer_size,
 	RUNG *rung;
 	size_t rung_hash_length = 0;
 
-	// Ladder from draft-harvey-cfrg-mtl-mode-00 Section 7.1
+	// Ladder from draft-kaizer-dnsop-ml-dsa-mtl-dnssec-00 section 5.1.2.1
 	// Flags (2)
 	VERIFY_LADDER_BUFFER_LEN(sig_ptr, sizeof(ladder->flags), sig_end_ptr, ladder, ladder_ptr);	
 	sig_ptr += bytes_to_uint16(sig_ptr, &ladder->flags);
@@ -268,7 +268,7 @@ uint32_t mtl_ladder_from_buffer(uint8_t *buffer, size_t buffer_size,
 	sig_ptr += bytes_to_uint16(sig_ptr, &ladder->rung_count);
 	ladder_size += sizeof(ladder->rung_count);
 
-	// Rung from draft-harvey-cfrg-mtl-mode-00 Section 7.2
+	// Rung from draft-kaizer-dnsop-ml-dsa-mtl-dnssec-00 section 5.1.2.1
 	rung_hash_length = sizeof(RUNG) * (size_t)ladder->rung_count;
 	ladder->rungs = malloc(rung_hash_length);
 	if (ladder->rungs == NULL) {
@@ -279,13 +279,13 @@ uint32_t mtl_ladder_from_buffer(uint8_t *buffer, size_t buffer_size,
 		rung =
 		    (RUNG *) ((uint8_t *) ladder->rungs + (sizeof(RUNG) * i));
 
-		// Left Index (4)
+		// Left Index (8)
 		rung->hash_length = hash_size;
 		VERIFY_LADDER_BUFFER_LEN(sig_ptr, sizeof(MTL_INDEX), sig_end_ptr, ladder, ladder_ptr);	
 		sig_ptr += bytes_to_mtl_index(sig_ptr, &rung->left_index);
 		ladder_size += sizeof(MTL_INDEX);
 
-		// Right Index (4)
+		// Right Index (8)
 		VERIFY_LADDER_BUFFER_LEN(sig_ptr, sizeof(MTL_INDEX), sig_end_ptr, ladder, ladder_ptr);	
 		sig_ptr += bytes_to_mtl_index(sig_ptr, &rung->right_index);
 		ladder_size += sizeof(MTL_INDEX);
@@ -331,8 +331,8 @@ uint32_t mtl_ladder_to_buffer(LADDER * ladder, uint32_t hash_size,
 		return 0;		
 	}
 	
-	// draft-harvey-cfrg-mtl-mode-08 Section 7.1
-	// Ladder = flags + SID + rung count + list of rungs
+	// draft-kaizer-dnsop-ml-dsa-mtl-dnssec-00 section 5.1.2.1 
+	// Ladder = flags + SID + rung count + rungs
 	expected_sig_size = sizeof(ladder->flags) + 2*hash_size 
 							+ sizeof(ladder->rung_count) 
 							// rung = left index + right index + hash
@@ -345,7 +345,7 @@ uint32_t mtl_ladder_to_buffer(LADDER * ladder, uint32_t hash_size,
 	}
 	sig_ptr = sig_buffer;
 
-	// Ladder from draft-harvey-cfrg-mtl-mode-00 Section 7.1
+	// Ladder from draft-kaizer-dnsop-ml-dsa-mtl-dnssec-00 section 5.1.2.1
 	// Flags (2)
 	sig_ptr += uint16_to_bytes(sig_ptr, ladder->flags);
 	sig_size += sizeof(ladder->flags);
@@ -359,7 +359,7 @@ uint32_t mtl_ladder_to_buffer(LADDER * ladder, uint32_t hash_size,
 	sig_ptr += uint16_to_bytes(sig_ptr, ladder->rung_count);
 	sig_size += sizeof(ladder->rung_count);
 
-	// Rung from draft-harvey-cfrg-mtl-mode-00 Section 7.2
+	// Rung from draft-kaizer-dnsop-ml-dsa-mtl-dnssec-00 section 5.1.2.1
 	// Rungs        
 	for (index = 0; index < ladder->rung_count; index++) {
 		rung =

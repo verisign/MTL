@@ -1,6 +1,6 @@
 AM_CFLAGS="-Wall -O0 -g"
 
-AC_INIT([mtllib],[1.2.1],[jsharvey@verisign.com])
+AC_INIT([mtllib], [1.3], [jsharvey@verisign.com])
 AC_CONFIG_SRCDIR([src])
 AC_CONFIG_HEADERS([mtllib_config.h])
 AM_INIT_AUTOMAKE([-Wall -Werror foreign])
@@ -9,6 +9,7 @@ m4_ifdef([AM_PROG_AR], [AM_PROG_AR])
 AC_ENABLE_SHARED(yes)
 LT_INIT
 
+AC_HEADER_STDC
 AC_HEADER_DIRENT
 AC_CHECK_HEADERS([stdlib.h stdio.h libintl.h locale.h])
 AC_SEARCH_LIBS([EVP_MD_CTX_new], [crypto], ,[AC_MSG_ERROR(an acceptable version of libcrypto was not found)])
@@ -27,4 +28,4 @@ AC_PROG_CC
 dnl AC_PROG_RANLIB
 AM_PROG_CC_C_O
 AC_CONFIG_FILES([Makefile src/Makefile test/Makefile examples/Makefile])
-AC_OUTPUT
+AC_OUTPUT()
