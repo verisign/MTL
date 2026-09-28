@@ -1,5 +1,5 @@
 # MTL
-MTL Reference Library Implementation based on [draft-kaizer-dnsop-ml-dsa-mtl-dnssec-01](https://datatracker.ietf.org/doc/draft-kaizer-dnsop-ml-dsa-mtl-dnssec/)
+MTL Reference Library Implementation based on [draft-kaizer-dnsop-ml-dsa-mtl-dnssec-02](https://datatracker.ietf.org/doc/draft-kaizer-dnsop-ml-dsa-mtl-dnssec/)
 
 ## Dependencies
 * libcrypto from openssl version 3.1.0 or newer (or substitute crypto operations to replace the spx_funcs.c functions)
@@ -222,7 +222,7 @@ Usage: mtlverify [options] algorithm_str key_file message_file signature_file [l
 Randomization is defined in the schemes table. It needs to match the underlying signature scheme randomization strategy, which can be a compile time decision for some libraries.
 
 ## MTL Tree Sizes
-The page and record sizes for MTL mode are defined in the src/mtl_node_set.h file. Larger sizes allows for larger trees but requires more resources.  This value can be tailored to support smaller instances if desired.  The default values are 1 Megabyte per page with 1024 pages resulting in 1 Gigabyte of hashes in memory.  For a 128 bit hash this results in a max of 67,108,864 hashes (~33,554,432 messages signed) and for a 256 bit hash this results in 33,554,432 hashes (~16,777,216 messages signed)
+The page and record sizes for MTL mode are defined in the src/mtl_node_set.h file. Larger sizes allows for larger trees but requires more resources.  This value can be tailored to support smaller instances if desired.  The default values are 1 Megabyte per page with 8192 pages resulting in 8 Gigabytes of hashes in memory.  For a 128 bit hash this results in a max of 536,870,912 hashes (~268,435,456 messages signed) and for a 256 bit hash this results in 268,435,456 hashes (~134,217,728 messages signed)
 
 ## Open Items
 * MTL Provider is tested through the application in the test folder and the example application. These applications are to demonstrate the capability and are not production worthy.  Some code paths are not implemented or are not fully tested. 

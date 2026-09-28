@@ -191,8 +191,8 @@ MTLLIB_STATUS mtllib_pubkey_from_buffer(char *keystr, MTLLIB_CTX **ctx, MTLLIB_B
                                      mtllib_ctx, NULL, 0,
                                      mtllib_buffer_data_ptr(pubkey),
                                      mtllib_buffer_in_use(pubkey),
-                                    NULL,
-                                    MTL_PUBLIC_KEY) != MTLLIB_OK)
+                                     &sid,
+                                     MTL_PUBLIC_KEY) != MTLLIB_OK)
     {
         LOG_ERROR("Key Setup Failed");
         mtllib_key_free(mtllib_ctx);
