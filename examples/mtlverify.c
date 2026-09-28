@@ -63,7 +63,6 @@ static void print_usage(void)
     printf("\n    OPTIONS\n");
     printf("      -h              Print this help message\n");
     printf("      -t              Trust the cached ladder (do not verify the signature on it)\n");
-    printf("      -v              Use verbose output\n");
     printf("\n    PARAMETERS\n");
     printf("      algorithm_str  The algorithms string identifying the algorithm to verify\n");
     printf("      pubkey_file    The file name/path where the public key should be read\n");
@@ -170,7 +169,7 @@ int main(int argc, char **argv)
     }
 
     // Parse input into data structures
-    mtllib_errno = mtllib_pubkey_from_buffer(keystr, &ctx, key_buffer, mtllib_buffer_data_ptr(signature_buffer));
+    mtllib_errno = mtllib_pubkey_from_buffer(keystr, &ctx, key_buffer, mtllib_buffer_data_ptr(signature_buffer)+2);
     HANDLE_ERRORS(mtllib_errno);
 
     // Run verification functions
