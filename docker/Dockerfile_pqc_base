@@ -38,8 +38,6 @@ FROM registry.fedoraproject.org/fedora-minimal:latest AS base_image
 USER root
 RUN dnf -y install gcc git perl make cmake libtool autoconf
 
-RUN echo "/usr/local/lib64" > /etc/ld.so.conf.d/crypto.conf
-
 # Set the working directory in the container
 RUN mkdir -p /usr/local/app
 WORKDIR /usr/local/app
@@ -61,7 +59,7 @@ RUN cd liboqs && \
    mkdir -p build && \
    cd build && \
    rm -rf CMakeCache.txt && \
-   cmake -DBUILD_SHARED_LIBS=ON -DCMAKE_INSTALL_PREFIX=/usr/local .. && \
+   cmake -DBUILD_SHARED_LIBS=ON -DCMAKE_INSTALL_PREFIX=/usr/local DOQS_BUILD_ONLY_LIB=ON -DOQS_MINIMAL_BUILD="SIG_ML_DSA;SIG_ml_dsa;SIG_SLH_DSA;SIG_slh_dsa;SIG_FALCON;SIG_falcon" .. && \
    make && \
    make install
 
@@ -72,7 +70,6 @@ RUN cd liboqs && \
 #######################################
 FROM registry.fedoraproject.org/fedora-minimal:latest AS core-pqc
 
-RUN echo "/usr/local/lib64" > /etc/ld.so.conf.d/crypto.conf
 # Get the include files
 COPY --from=base_image /usr/local/include /usr/local/include
 # Get the binary files (e.g. openssl)

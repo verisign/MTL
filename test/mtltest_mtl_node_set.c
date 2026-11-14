@@ -40,6 +40,7 @@
 
 // Prototypes for testing functions
 uint8_t mtltest_mtl_node_set_init(void);
+uint8_t mtltest_mtl_node_set_init_192_bits(void);
 uint8_t mtltest_mtl_node_set_init_null(void);
 uint8_t mtltest_mtl_node_set_insert(void);
 uint8_t mtltest_mtl_node_set_fetch(void);
@@ -64,6 +65,7 @@ uint8_t mtltest_mtl_node_set(void)
 	RUN_TEST(mtltest_mtl_node_id_invalid, "Verify the hash tree id map w/invalid parameters");
 
 	RUN_TEST(mtltest_mtl_node_set_init, "Verify node set initalization");
+	RUN_TEST(mtltest_mtl_node_set_init_192_bits, "Verify node set initialization with non-sha2 byte alignment")
 	RUN_TEST(mtltest_mtl_node_set_init_null,
 		 "Verify node set initalization w/null parameter");
 	RUN_TEST(mtltest_mtl_node_set_insert,
@@ -133,6 +135,73 @@ uint8_t mtltest_mtl_node_set_init(void)
 	assert(nodes.hash_size == hash_len);
 	assert(nodes.pub_key == MTL_PUBLIC_KEY);	
 	assert(nodes.tree_page_size == MTL_TREE_PAGE_SIZE);
+
+	// Cleanup and verify clean up works
+	mtl_node_set_free(&nodes);
+	assert(nodes.pub_key == 0);
+	assert(nodes.leaf_count == 0);
+	assert(nodes.hash_size == 0);
+	assert(nodes.tree_page_size == 0);
+
+	mtl_node_set_free(&nodes);
+
+	return 0;
+}
+
+/**
+ * Test the mtl node id initialzation function
+ * This is the successful allocation and free test
+ */
+uint8_t mtltest_mtl_node_set_init_192_bits(void)
+{
+	MTLNODES nodes;
+	uint32_t index;
+	SERIESID sid;
+	uint16_t hash_len = 24;
+	uint8_t sid_val[] = {  // Randomly generated test value
+		0x16, 0x37, 0xfb, 0x9b, 0x83, 0xef, 0xe1, 0xf7, 
+		0x8e, 0x5d, 0xa5, 0x12, 0xb5, 0x75, 0xd7, 0xe1, 
+		0x19, 0x12, 0x58, 0x20, 0x76, 0x5f, 0xb6, 0x06, 
+		0x1c, 0xad, 0x3c, 0xfc, 0xe5, 0x85, 0xbd, 0xfa, 
+		0x19, 0x12, 0x58, 0x20, 0x76, 0x5f, 0xb6, 0x06, 
+		0x1c, 0xad, 0x3c, 0xfc, 0xe5, 0x85, 0xbd, 0xfa, 	
+	};
+
+	sid.length = 48;
+	memcpy(sid.id, sid_val, sid.length);
+
+	mtl_node_set_init(&nodes, &sid, MTL_PRIVATE_KEY);
+
+	assert(nodes.leaf_count == 0);
+	assert(nodes.hash_size == hash_len);
+	assert(nodes.pub_key == MTL_PRIVATE_KEY);
+	assert(nodes.tree_page_size != MTL_TREE_PAGE_SIZE);
+	assert(nodes.tree_page_size == ((int)MTL_TREE_PAGE_SIZE/nodes.hash_size) * nodes.hash_size);
+
+	for (index = 0; index < MTL_TREE_MAX_PAGES; index++) {
+		assert(nodes.tree_pages[index] == NULL);
+	}
+
+	// Cleanup and verify clean up works
+	mtl_node_set_free(&nodes);
+	assert(nodes.pub_key == 0);
+	assert(nodes.leaf_count == 0);
+	assert(nodes.hash_size == 0);
+	assert(nodes.tree_page_size == 0);
+
+	for (index = 0; index < MTL_TREE_MAX_PAGES; index++) {
+		assert(nodes.tree_pages[index] == NULL);
+	}
+
+	mtl_node_set_free(&nodes);
+
+	mtl_node_set_init(&nodes, &sid, MTL_PUBLIC_KEY);
+
+	assert(nodes.leaf_count == 0);
+	assert(nodes.hash_size == hash_len);
+	assert(nodes.pub_key == MTL_PUBLIC_KEY);	
+	assert(nodes.tree_page_size != MTL_TREE_PAGE_SIZE);
+	assert(nodes.tree_page_size == ((int)MTL_TREE_PAGE_SIZE/nodes.hash_size) * nodes.hash_size);
 
 	// Cleanup and verify clean up works
 	mtl_node_set_free(&nodes);

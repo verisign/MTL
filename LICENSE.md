@@ -4,6 +4,12 @@ security, stability and resiliency of the Domain Name System (DNS) and the inter
 For more information about the licenses, see the following IETF IPR declarations or
 updates thereto:
 
+* https://datatracker.ietf.org/ipr/7693/
+* https://datatracker.ietf.org/ipr/7692/
+* https://datatracker.ietf.org/ipr/7691/
+* https://datatracker.ietf.org/ipr/7690/
+* https://datatracker.ietf.org/ipr/7689/
+
 * https://datatracker.ietf.org/ipr/7392/
 * https://datatracker.ietf.org/ipr/7391/
 * https://datatracker.ietf.org/ipr/7390/

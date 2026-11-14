@@ -40,7 +40,7 @@ RUN dnf install -y python3.12 python3-pip
 # RUN dnf install python3-pip
 
 # Install Python dependencies
-RUN pip3 install --no-cache-dir jupyterlab dnspython
+RUN pip3 install --no-cache-dir jupyterlab dnspython pandas networkx rich matplotlib
 
 # Setup working directory
 RUN mkdir -p /app/jupyter/

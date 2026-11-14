@@ -1,0 +1,33 @@
+{
+  "treeid": "mtl-incrsig-demo",
+  "sid": "8f5ce818a1df091dfb8288ccad6ff45099a48c464f540cab05114981736bb9d0",
+  "total_leaves": 10,
+  "nodes": {
+    "level_0": [
+      { "left_index": 0, "right_index": 0, "hash": "9f69f5f059ef813453bf1c2dfc82a48c" },
+      { "left_index": 1, "right_index": 1, "hash": "6ead94b673ea287a47b269c170047935" },
+      { "left_index": 2, "right_index": 2, "hash": "1fb7bb19f0930de6561907df6f703e77" },
+      { "left_index": 3, "right_index": 3, "hash": "2c9f950969aa553dea8407167f56c0ad" }, 
+      { "left_index": 4, "right_index": 4, "hash": "ceb61a79cefafc18be08495d1d9f212d" },
+      { "left_index": 5, "right_index": 5, "hash": "b1a6e1a4db73ce8d9ac4449ab8f337b3" },
+      { "left_index": 6, "right_index": 6, "hash": "67daf1060540de73197e15df7b6fcbc5" },
+      { "left_index": 7, "right_index": 7, "hash": "3475c3bedbfdd3a80f345b2651ad1ad1" },
+      { "left_index": 8, "right_index": 8, "hash": "e90354f0a10015d979ae8f5b3e807d47" },
+      { "left_index": 9, "right_index": 9, "hash": "27eff2122763cac63f1461e8c3f4a202" }
+    ],
+    "level_1": [
+      { "left_index": 0, "right_index": 1, "hash": "0254fe634d1a41da128d97f98d04ca20" },
+      { "left_index": 2, "right_index": 3, "hash": "2b7bcb12a626e074f2676ecd0ff6a7cd" },
+      { "left_index": 4, "right_index": 5, "hash": "439ea68b0bf8c252782ce8934bbedad2" },
+      { "left_index": 6, "right_index": 7, "hash": "314bf5188cca9cddb4871064379e3987" },
+      { "left_index": 8, "right_index": 9, "hash": "f7bd25c0259aee4630c78b9e54b2704b" }
+    ],
+    "level_2": [
+      { "left_index": 0, "right_index": 3, "hash": "d32a72536821faf57a6c3828c87d46b2" },
+      { "left_index": 4, "right_index": 7, "hash": "497427e4772ab17f63e2b11e3db32807" }
+    ],
+    "level_3": [
+      { "left_index": 0, "right_index": 7, "hash": "79a2ee20a2778083cbf9731ef165d3fc" }
+    ]
+  }
+}

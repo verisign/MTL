@@ -261,62 +261,15 @@ uint8_t mtltest_mtllib_pubkey_from_buffer(void)
         OQS_SIG_falcon_padded_512_length_public_key,
 //        OQS_SIG_falcon_1024_length_public_key,
         OQS_SIG_falcon_padded_1024_length_public_key,
-        OQS_SIG_mayo_1_length_public_key,
-        OQS_SIG_mayo_2_length_public_key,
-        OQS_SIG_mayo_3_length_public_key,
-        OQS_SIG_mayo_5_length_public_key,
-        OQS_SIG_cross_rsdp_128_balanced_length_public_key,
-        OQS_SIG_cross_rsdp_128_fast_length_public_key,
-        OQS_SIG_cross_rsdp_128_small_length_public_key,
-        OQS_SIG_cross_rsdp_192_balanced_length_public_key,
-        OQS_SIG_cross_rsdp_192_fast_length_public_key,
-        OQS_SIG_cross_rsdp_192_small_length_public_key,
-        OQS_SIG_cross_rsdp_256_balanced_length_public_key,
-        OQS_SIG_cross_rsdp_256_fast_length_public_key,
-        OQS_SIG_cross_rsdp_256_small_length_public_key,
-        OQS_SIG_cross_rsdpg_128_balanced_length_public_key,
-        OQS_SIG_cross_rsdpg_128_fast_length_public_key,
-        OQS_SIG_cross_rsdpg_128_small_length_public_key,
-        OQS_SIG_cross_rsdpg_192_balanced_length_public_key,
-        OQS_SIG_cross_rsdpg_192_fast_length_public_key,
-        OQS_SIG_cross_rsdpg_192_small_length_public_key,
-        OQS_SIG_cross_rsdpg_256_balanced_length_public_key,
-        OQS_SIG_cross_rsdpg_256_fast_length_public_key,
-        OQS_SIG_cross_rsdpg_256_small_length_public_key,
-        OQS_SIG_uov_ov_Is_length_public_key,
-        OQS_SIG_uov_ov_Ip_length_public_key,
-        OQS_SIG_uov_ov_III_length_public_key,
-        OQS_SIG_uov_ov_V_length_public_key,
-        OQS_SIG_uov_ov_Is_pkc_length_public_key,
-        OQS_SIG_uov_ov_Ip_pkc_length_public_key,
-        OQS_SIG_uov_ov_III_pkc_length_public_key,
-        OQS_SIG_uov_ov_V_pkc_length_public_key,
-        OQS_SIG_uov_ov_Is_pkc_skc_length_public_key,
-        OQS_SIG_uov_ov_Ip_pkc_skc_length_public_key,
-        OQS_SIG_uov_ov_III_pkc_skc_length_public_key,
-        OQS_SIG_uov_ov_V_pkc_skc_length_public_key,
-        OQS_SIG_snova_SNOVA_24_5_4_length_public_key,
-        OQS_SIG_snova_SNOVA_24_5_4_SHAKE_length_public_key,
-        OQS_SIG_snova_SNOVA_24_5_4_esk_length_public_key,
-        OQS_SIG_snova_SNOVA_24_5_4_SHAKE_esk_length_public_key,
-        OQS_SIG_snova_SNOVA_37_17_2_length_public_key,
-        OQS_SIG_snova_SNOVA_25_8_3_length_public_key,
-        OQS_SIG_snova_SNOVA_56_25_2_length_public_key,
-        OQS_SIG_snova_SNOVA_49_11_3_length_public_key,
-        OQS_SIG_snova_SNOVA_37_8_4_length_public_key,
-        OQS_SIG_snova_SNOVA_24_5_5_length_public_key,
-        OQS_SIG_snova_SNOVA_60_10_4_length_public_key,
-        OQS_SIG_snova_SNOVA_29_6_5_length_public_key
 	};
 	uint8_t sid[32];
 	FILE *fd = NULL;
 	MTLLIB_BUFFER *pubkey_buffer = NULL;
 	
-	// OV Keys are very large so it is best to allocate heap space not stack space for test.
-	pubkey = calloc(1, OQS_SIG_uov_ov_V_length_public_key);
+	// use largest pubkey size to set based on above
+	pubkey = calloc(1, OQS_SIG_ml_dsa_87_length_public_key);
 	assert(pubkey != NULL);
 	memset(&sid[0], 0x55, 32);
-	memset(pubkey, 0xaf, 4096);
 	// Setup to get random data for the test pubkey
 	if ((fd = fopen("/dev/random", "r")) == NULL) {
 		free(pubkey);

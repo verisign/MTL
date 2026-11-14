@@ -1,5 +1,5 @@
 # MTL
-MTL Reference Library Implementation based on [draft-kaizer-dnsop-ml-dsa-mtl-dnssec-02](https://datatracker.ietf.org/doc/draft-kaizer-dnsop-ml-dsa-mtl-dnssec/)
+MTL Reference Library Implementation based on [draft-kaizer-dnsop-ml-dsa-mtl-dnssec-03](https://datatracker.ietf.org/doc/draft-kaizer-dnsop-ml-dsa-mtl-dnssec/)
 
 ## Dependencies
 * libcrypto from openssl version 3.1.0 or newer (or substitute crypto operations to replace the spx_funcs.c functions)
@@ -60,52 +60,6 @@ Usage: mtlkeygen filename algorithm_str
       ML-DSA-87-MTL-SHAKE-256
       Falcon-padded-512-MTL-SHAKE-128
       Falcon-padded-1024-MTL-SHAKE-256
-      MAYO-1-MTL-SHAKE-128
-      MAYO-2-MTL-SHAKE-128
-      MAYO-3-MTL-SHAKE-192
-      MAYO-5-MTL-SHAKE-256
-      cross-rsdp-128-balanced-MTL-SHAKE-128
-      cross-rsdp-128-fast-MTL-SHAKE-128
-      cross-rsdp-128-small-MTL-SHAKE-128
-      cross-rsdp-192-balanced-MTL-SHAKE-192
-      cross-rsdp-192-fast-MTL-SHAKE-192
-      cross-rsdp-192-small-MTL-SHAKE-192
-      cross-rsdp-256-balanced-MTL-SHAKE-256
-      cross-rsdp-256-fast-MTL-SHAKE-256
-      cross-rsdp-256-small-MTL-SHAKE-256
-      cross-rsdpg-128-balanced-MTL-SHAKE-128
-      cross-rsdpg-128-fast-MTL-SHAKE-128
-      cross-rsdpg-128-small-MTL-SHAKE-128
-      cross-rsdpg-192-balanced-MTL-SHAKE-192
-      cross-rsdpg-192-fast-MTL-SHAKE-192
-      cross-rsdpg-192-small-MTL-SHAKE-192
-      cross-rsdpg-256-balanced-MTL-SHAKE-256
-      cross-rsdpg-256-fast-MTL-SHAKE-256
-      cross-rsdpg-256-small-MTL-SHAKE-256
-      OV-Is-MTL-SHAKE-128
-      OV-Ip-MTL-SHAKE-128
-      OV-III-MTL-SHAKE-192
-      OV-V-MTL-SHAKE-256
-      OV-Is-pkc-MTL-SHAKE-128
-      OV-Ip-pkc-MTL-SHAKE-128
-      OV-III-pkc-MTL-SHAKE-192
-      OV-V-pkc-MTL-SHAKE-256
-      OV-Is-pkc-skc-MTL-SHAKE-128
-      OV-Ip-pkc-skc-MTL-SHAKE-128
-      OV-III-pkc-skc-MTL-SHAKE-192
-      OV-V-pkc-skc-MTL-SHAKE-256
-      SNOVA_24_5_4-MTL-SHAKE-128
-      SNOVA_24_5_4_SHAKE-MTL-SHAKE-128
-      SNOVA_24_5_4_esk-MTL-SHAKE-128
-      SNOVA_24_5_4_SHAKE_esk-MTL-SHAKE-128
-      SNOVA_37_17_2-MTL-SHAKE-128
-      SNOVA_25_8_3-MTL-SHAKE-128
-      SNOVA_56_25_2-MTL-SHAKE-192
-      SNOVA_49_11_3-MTL-SHAKE-192
-      SNOVA_37_8_4-MTL-SHAKE-192
-      SNOVA_24_5_5-MTL-SHAKE-192
-      SNOVA_60_10_4-MTL-SHAKE-256
-      SNOVA_29_6_5-MTL-SHAKE-256
 ```
 
 ### MTLSIGN
@@ -168,52 +122,6 @@ Usage: mtlverify [options] algorithm_str key_file message_file signature_file [l
       ML-DSA-87-MTL-SHAKE-256
       Falcon-padded-512-MTL-SHAKE-128
       Falcon-padded-1024-MTL-SHAKE-256
-      MAYO-1-MTL-SHAKE-128
-      MAYO-2-MTL-SHAKE-128
-      MAYO-3-MTL-SHAKE-192
-      MAYO-5-MTL-SHAKE-256
-      cross-rsdp-128-balanced-MTL-SHAKE-128
-      cross-rsdp-128-fast-MTL-SHAKE-128
-      cross-rsdp-128-small-MTL-SHAKE-128
-      cross-rsdp-192-balanced-MTL-SHAKE-192
-      cross-rsdp-192-fast-MTL-SHAKE-192
-      cross-rsdp-192-small-MTL-SHAKE-192
-      cross-rsdp-256-balanced-MTL-SHAKE-256
-      cross-rsdp-256-fast-MTL-SHAKE-256
-      cross-rsdp-256-small-MTL-SHAKE-256
-      cross-rsdpg-128-balanced-MTL-SHAKE-128
-      cross-rsdpg-128-fast-MTL-SHAKE-128
-      cross-rsdpg-128-small-MTL-SHAKE-128
-      cross-rsdpg-192-balanced-MTL-SHAKE-192
-      cross-rsdpg-192-fast-MTL-SHAKE-192
-      cross-rsdpg-192-small-MTL-SHAKE-192
-      cross-rsdpg-256-balanced-MTL-SHAKE-256
-      cross-rsdpg-256-fast-MTL-SHAKE-256
-      cross-rsdpg-256-small-MTL-SHAKE-256
-      OV-Is-MTL-SHAKE-128
-      OV-Ip-MTL-SHAKE-128
-      OV-III-MTL-SHAKE-192
-      OV-V-MTL-SHAKE-256
-      OV-Is-pkc-MTL-SHAKE-128
-      OV-Ip-pkc-MTL-SHAKE-128
-      OV-III-pkc-MTL-SHAKE-192
-      OV-V-pkc-MTL-SHAKE-256
-      OV-Is-pkc-skc-MTL-SHAKE-128
-      OV-Ip-pkc-skc-MTL-SHAKE-128
-      OV-III-pkc-skc-MTL-SHAKE-192
-      OV-V-pkc-skc-MTL-SHAKE-256
-      SNOVA_24_5_4-MTL-SHAKE-128
-      SNOVA_24_5_4_SHAKE-MTL-SHAKE-128
-      SNOVA_24_5_4_esk-MTL-SHAKE-128
-      SNOVA_24_5_4_SHAKE_esk-MTL-SHAKE-128
-      SNOVA_37_17_2-MTL-SHAKE-128
-      SNOVA_25_8_3-MTL-SHAKE-128
-      SNOVA_56_25_2-MTL-SHAKE-192
-      SNOVA_49_11_3-MTL-SHAKE-192
-      SNOVA_37_8_4-MTL-SHAKE-192
-      SNOVA_24_5_5-MTL-SHAKE-192
-      SNOVA_60_10_4-MTL-SHAKE-256
-      SNOVA_29_6_5-MTL-SHAKE-256
 
 ```
 
@@ -222,7 +130,7 @@ Usage: mtlverify [options] algorithm_str key_file message_file signature_file [l
 Randomization is defined in the schemes table. It needs to match the underlying signature scheme randomization strategy, which can be a compile time decision for some libraries.
 
 ## MTL Tree Sizes
-The page and record sizes for MTL mode are defined in the src/mtl_node_set.h file. Larger sizes allows for larger trees but requires more resources.  This value can be tailored to support smaller instances if desired.  The default values are 1 Megabyte per page with 8192 pages resulting in 8 Gigabytes of hashes in memory.  For a 128 bit hash this results in a max of 536,870,912 hashes (~268,435,456 messages signed) and for a 256 bit hash this results in 268,435,456 hashes (~134,217,728 messages signed)
+The page and record sizes for MTL mode are defined in the src/mtl_node_set.h file. Larger sizes allows for larger trees but requires more resources.  This value can be tailored to support smaller instances if desired.  The default values are 1 Megabyte per page with 1024 pages resulting in 1 Gigabyte of hashes in memory.  For a 128 bit hash this results in a max of 67,108,864 hashes (~33,554,432 messages signed) and for a 256 bit hash this results in 33,554,432 hashes (~16,777,216 messages signed)
 
 ## Open Items
 * MTL Provider is tested through the application in the test folder and the example application. These applications are to demonstrate the capability and are not production worthy.  Some code paths are not implemented or are not fully tested. 
