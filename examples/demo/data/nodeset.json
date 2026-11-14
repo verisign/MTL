@@ -1,0 +1,33 @@
+{
+  "treeid": "mtl-demo",
+  "sid": "8f5ce818a1df091dfb8288ccad6ff45099a48c464f540cab05114981736bb9d0",
+  "total_leaves": 10,
+  "nodes": {
+    "level_0": [
+      { "left_index": 0, "right_index": 0, "randomizer": "f4e32a88b19cd75f631a0e4b88229c11","hash": "5c13a4a3ab099af510b243fed61b54df" },
+      { "left_index": 1, "right_index": 1, "hash": "6ead94b673ea287a47b269c170047935" },
+      { "left_index": 2, "right_index": 2, "hash": "1fb7bb19f0930de6561907df6f703e77" },
+      { "left_index": 3, "right_index": 3, "hash": "2c9f950969aa553dea8407167f56c0ad" }, 
+      { "left_index": 4, "right_index": 4, "hash": "ceb61a79cefafc18be08495d1d9f212d" },
+      { "left_index": 5, "right_index": 5, "randomizer": "8a05c3d4f7e219ba88301ecbc994d502", "hash": "1156761388e764d11ed9518a59366803" },
+      { "left_index": 6, "right_index": 6, "randomizer": "7b3d92e1f4a6c80b592d3f1a648e7c9b", "hash": "f36d227ef01d804baf7747a16b1af5ba" },
+      { "left_index": 7, "right_index": 7, "randomizer": "e28a5c31fd490b6781ea203bc957f462", "hash": "1e3fb80cdf648194f2f036112c841c29" },
+      { "left_index": 8, "right_index": 8, "hash": "e90354f0a10015d979ae8f5b3e807d47" },
+      { "left_index": 9, "right_index": 9, "randomizer": "2d778a35b84de7c8739b0f3b00374a36", "hash": "3285f3f15ae48cd97c21b030046ed925" }
+    ],
+    "level_1": [
+      { "left_index": 0, "right_index": 1, "hash": "e6c4658b380ca6bd3a7bda476616bbcc" },
+      { "left_index": 2, "right_index": 3, "hash": "2b7bcb12a626e074f2676ecd0ff6a7cd" },
+      { "left_index": 4, "right_index": 5, "hash": "9c003223ee1b173342b578aa8c5d3c56" },
+      { "left_index": 6, "right_index": 7, "hash": "1432f7a9a76009432b0e2050727fdc89" },
+      { "left_index": 8, "right_index": 9, "hash": "b015b4429bec7e08ee28b28a79c453a5" }
+    ],
+    "level_2": [
+      { "left_index": 0, "right_index": 3, "hash": "ad692e7d45185ce82bf093144a22c715" },
+      { "left_index": 4, "right_index": 7, "hash": "33d3a654e1a31a4d91ef3c28478a6cc8" }
+    ],
+    "level_3": [
+      { "left_index": 0, "right_index": 7, "hash": "8080dfd002e93ac7994f0cb974ffe704" }
+    ]
+  }
+}

@@ -756,7 +756,7 @@ MTLLIB_STATUS mtllib_sign_get_signed_ladder(MTLLIB_CTX *ctx, MTLLIB_BUFFER *ladd
     }
     else {
         // OQS_SIG_sign_with_ctx_str() supports the use of context strings
-        // Since the context string MUST be null as per draft-kaizer-dnsop-ml-dsa-mtl-dnssec-00, OQS_SIG_sign() is used instead
+        // Since the context string MUST be null as per draft-kaizer-dnsop-ml-dsa-mtl-dnssec-00, OQS_SIG_sign() is used instead                  
         oqs_return_code = OQS_SIG_sign(ctx->signature, 
                      ladder_sig + 4 + ladder_buffer_len, &ladder_sig_len, 
                      ladder_buffer, ladder_buffer_len, 

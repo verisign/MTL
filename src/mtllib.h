@@ -46,10 +46,10 @@
 #include "mtllib_status.h"
 
 /** Context used for signing ladders 
-* \todo update to real fixed customization string once MTL_OID is assigned
+ * Currently empty to align with draft-kaizer-dnsop-ml-dsa-mtl-dnssec-02
  */
-#define MTL_SIGNING_CTX_STR_LEN 7
-#define MTL_SIGNING_CTX_STR ((const uint8_t *)"OID_MTL")
+#define MTL_SIGNING_CTX_STR_LEN 0
+#define MTL_SIGNING_CTX_STR ((const uint8_t *)"")
 
 typedef enum MTL_HASH_ALGORITHM
 {

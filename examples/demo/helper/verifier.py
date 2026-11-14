@@ -274,9 +274,11 @@ class ADRS:
 def calculate_hash(payload: bytes, hash_alg: str, n: int) -> bytes:
     """
     To call Python hashlib to calculate hash values. 
-    :param payload: payload in bytes
-    :param hash_alg: hash algorithm
-    :param n: security parameter
+    Parameters:
+    -----------
+    payload : payload in bytes
+    hash_alg: hash algorithm
+    n       : security parameter
     """
     if hash_alg == "sha2":
         hasher = hashlib.sha256()
@@ -311,7 +313,7 @@ def calculate_hash(payload: bytes, hash_alg: str, n: int) -> bytes:
 # -------------------------- Leaf Node -------------------------- #
 def generate_payload_leaf(sid: bytes, rand: bytes, adrs: ADRS, ctx_msg: bytes, leaf_message: bytes) -> bytes:
     """
-    Reference: draft-kaizer-dnsop-ml-dsa-mtl-dnssec-01 Section 5-2.
+    Reference: draft-kaizer-dnsop-ml-dsa-mtl-dnssec Section 5-2.
     cSHAKE(SID || Rand || leaf_index || OLEN(ctx_msg) || ctx_msg || msg)
     """
     # Byte buffer
@@ -333,13 +335,15 @@ def generate_payload_leaf(sid: bytes, rand: bytes, adrs: ADRS, ctx_msg: bytes, l
 def hash_leaf(sid: bytes, randomizer: bytes, leaf_index: int, ctx_msg: bytes, message: bytes, hash_alg: str, n: int) -> bytes:
     """
     To hash a message to produce a leaf node.
-    :param sid: series identifier SID
-    :param leaf_index: index of the leaf node
-    :param randomizer: randomizer in bytes
-    :param ctx_msg: context string (keeps empty in this demo)
-    :param message: message to be signed and verified
-    :param hash_alg: hash algorithm to use to generate node hashes
-    :param n: security parameter
+    Parameters:
+    -----------
+    sid       : series identifier SID
+    leaf_index: index of the leaf node
+    randomizer: randomizer in bytes
+    ctx_msg   : context string (keeps empty in this demo)
+    message   : message to be signed and verified
+    hash_alg  : hash algorithm to use to generate node hashes
+    n         : security parameter
     """
     mtlleafADRS = LEAFADRS()
     mtlleafADRS.set_indexes(leaf_index)
@@ -352,7 +356,7 @@ def hash_leaf(sid: bytes, randomizer: bytes, leaf_index: int, ctx_msg: bytes, me
 # -------------------------- Internal Nodes -------------------------- #
 def generate_payload_internal(sid: bytes, adrs: ADRS, left_hash: bytes, right_hash: bytes) -> bytes:
     """
-    Reference: draft-kaizer-dnsop-ml-dsa-mtl-dnssec-01 Section 5-2. 
+    Reference: draft-kaizer-dnsop-ml-dsa-mtl-dnssec Section 5-2. 
     cSHAKE(SID || Left_Index || Right_Index || H_L || H_R)
     """
     payload = bytearray()
@@ -370,13 +374,15 @@ def generate_payload_internal(sid: bytes, adrs: ADRS, left_hash: bytes, right_ha
 def hash_internal(sid: bytes, left_index: int, right_index: int, left_hash: bytes, right_hash: bytes, hash_alg: str, n: int) -> bytes:
     """
     To hash two child nodes to produce an internal node hash.
-    :param sid: series identifier SID
-    :param left_index: index of the left child node
-    :param right_index: index of the right child node
-    :param left_hash: hash value of the left child node
-    :param right_hash: hash value of the right child node
-    :param hash_alg: hash algorithm to use to generate node hashes
-    :param n: security parameter
+    Parameters:
+    -----------
+    sid        : series identifier SID
+    left_index : index of the left child node
+    right_index: index of the right child node
+    left_hash  : hash value of the left child node
+    right_hash : hash value of the right child node
+    hash_alg   : hash algorithm to use to generate node hashes
+    n          : security parameter
     """
     mtlinternalADRS = ADRS()
     mtlinternalADRS.set_indexes(left_index, right_index)
@@ -386,27 +392,36 @@ def hash_internal(sid: bytes, left_index: int, right_index: int, left_hash: byte
 
 
 def calculate_internal_nodes(sid: bytes, 
-                             leaf_index: int, 
+                             leaf_index: int | bytes, 
                              leaf_hash: bytes, 
                              sibling_list: list[dict[str, int | bytes]],
                              hash_alg: str,
                              n: int) -> list[dict[str, tuple | bytes]]:
     """
     To generate a list of internal nodes. 
-    :param sid: series identifier SID
-    :param leaf_index: index of the leaf node
-    :param leaf_hash: hash value of the leaf node
-    :param sibling_list: list of leaf node siblings
-    :param hash_alg: hash algorithm to use to generate node hashes
-    :param n: security parameter
+    Parameters:
+    -----------
+    sid         : series identifier SID
+    leaf_index  : index of the leaf node
+    leaf_hash   : hash value of the leaf node
+    sibling_list: list of leaf node siblings
+    hash_alg    : hash algorithm to use to generate node hashes
+    n           : security parameter
     """
+    if not sibling_list:
+        return []
+    
     num_internal = len(sibling_list)
     internal_nodes = []
 
     # Construct a dict for the leaf node
     leaf = {}
-    leaf["left_index"] = int(leaf_index.hex(), 16)
-    leaf["right_index"] = int(leaf_index.hex(), 16)
+    if isinstance(leaf_index, int):
+        leaf["left_index"] = leaf_index
+        leaf["right_index"] = leaf_index
+    else:
+        leaf["left_index"] = int.from_bytes(leaf_index, byteorder="big")
+        leaf["right_index"] = int.from_bytes(leaf_index, byteorder="big")
     leaf["hash"] = leaf_hash
     
     # Parents of internal nodes:
@@ -450,19 +465,30 @@ def calculate_internal_nodes(sid: bytes,
 
 
 # ----------------------------- Target Match with Ladder Rung ---------------------------- #
-def compare_with_rung(internal_nodes, 
-                      target_rung_lindex, 
-                      target_rung_rindex,
-                      rungs):
+def compare_with_rung(leaf_index: bytes,
+                      leaf_hash: bytes,
+                      internal_nodes: list[str, bytes], 
+                      target_rung_lindex: bytes, 
+                      target_rung_rindex: bytes,
+                      rungs: list[str, bytes]):
     """
     To compare the topmost internal node with the target rung. 
-    :param internal_nodes: list of internal nodes
-    :param target_rung_lindex: left index of the authentication path target rung
-    :param target_rung_rindex: right index of the authentication path target rung
-    :param rungs: list of rungs in a ladder
+    Parameters:
+    -----------
+    internal_nodes    : list of internal nodes
+    target_rung_lindex: left index of the authentication path target rung
+    target_rung_rindex: right index of the authentication path target rung
+    rungs             : list of rungs in a ladder
     """
-    topmost = internal_nodes[-1]
-    rung = None
+    if not internal_nodes:
+        topmost = {
+            "left_index": leaf_index,
+            "right_index": leaf_index,
+            "hash": leaf_hash
+        }
+    else: 
+        topmost = internal_nodes[-1]
+        rung = None
 
     # Find the target rung hash
     for i in range(len(rungs)):

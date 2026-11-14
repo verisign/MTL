@@ -594,7 +594,9 @@ MTLSTATUS mtl_verify(MTL_CTX * ctx,
  */
 MTLSTATUS mtl_free(MTL_CTX * ctx)
 {
-	mtl_node_set_free(&ctx->nodes);
+	if(ctx->nodes.tree_page_size != 0) {
+		mtl_node_set_free(&ctx->nodes);
+	}
 	free(ctx);
 	ctx = NULL;
 

@@ -57,7 +57,7 @@ void mtl_node_set_init(MTLNODES * nodes, SERIESID * sid, uint8_t pub_key)
 
 	nodes->leaf_count = 0;
 	nodes->hash_size = sid->length/2;
-	nodes->tree_page_size = MTL_TREE_PAGE_SIZE;
+	nodes->tree_page_size = ((int)(MTL_TREE_PAGE_SIZE / nodes->hash_size) * nodes->hash_size);;
 	nodes->pub_key = pub_key;
 	if(nodes->pub_key == MTL_PRIVATE_KEY) {
 		// Initalize the tree pages

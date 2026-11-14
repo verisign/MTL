@@ -38,7 +38,7 @@
 #ifndef __MTL_IMPL_H__
 #define __MTL_IMPL_H__
 
-#define MTL_LIB_VERSION "v1.3.1"
+#define MTL_LIB_VERSION "v1.3.2"
 
 #include <math.h>
 #include <openssl/evp.h>
